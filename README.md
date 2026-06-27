@@ -3,9 +3,13 @@
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Live App](https://img.shields.io/badge/🚀_Live_Demo-Open_Application-success?style=for-the-badge&logo=render)](https://hp-gas-cashmemo-tool.onrender.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+🌐 **Live Web Application**: [https://hp-gas-cashmemo-tool.onrender.com/](https://hp-gas-cashmemo-tool.onrender.com/)
+
 A powerful, high-efficiency desktop and web application specifically crafted for **HP Gas Distributorships & Agencies**. This tool automates the management of pending vendor cashmemos, delivery boy tracking, eKYC status monitoring, rate calculation, dynamic print page generation, and Excel exports.
+
 
 ---
 
