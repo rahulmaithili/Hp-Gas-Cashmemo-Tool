@@ -14,7 +14,7 @@ app.use(express.json());
 
 const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 const DEFAULT_SETTINGS = {
-  agencyName: process.env.AGENCY_NAME || 'M/S RAHUL HP GAS SERVICE',
+  agencyName: process.env.AGENCY_NAME || 'Shiv Shakti Hp Gas Agency ,Pandaul',
   rates: {
     '14.2 KG NON-SUBSIDIZED CYLINDER-LD(DBTL CTC)': parseInt(process.env.RATE_14_2_LD) || 950,
     '14.2 KG NON-SUBSIDIZED CYLINDER': parseInt(process.env.RATE_14_2) || 950,

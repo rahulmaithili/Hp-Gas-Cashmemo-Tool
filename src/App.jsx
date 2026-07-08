@@ -25,7 +25,7 @@ export default function App() {
   
   // App settings
   const [settings, setSettings] = useState({
-    agencyName: 'M/S RAHUL HP GAS SERVICE',
+    agencyName: 'Shiv Shakti Hp Gas Agency ,Pandaul',
     rates: {},
     defaultRate: 950,
     whatsAppMethod: 'web',
