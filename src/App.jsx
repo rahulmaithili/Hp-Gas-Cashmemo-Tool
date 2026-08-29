@@ -2068,36 +2068,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* PDF & Hindi translation tips/instructions banner */}
-              <div style={{ 
-                marginTop: '1rem', 
-                borderTop: '1px solid var(--border)', 
-                paddingTop: '1rem', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '0.5rem', 
-                backgroundColor: 'var(--primary-light)', 
-                border: '1px solid #bfdbfe', 
-                borderRadius: 'var(--radius-md)', 
-                padding: '1.25rem' 
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.9rem' }}>
-                  <AlertCircle size={18} />
-                  <span>💡 PDF & Hindi Print Tips (महत्वपूर्ण सुझाव)</span>
-                </div>
-                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.825rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.4rem', lineHeight: '1.4' }}>
-                  <li>
-                    <strong>For clean, selectable & small-size PDF:</strong> Click <strong>"Print PDF / Save"</strong> and select <strong>"Save as PDF"</strong> in your browser print options. This results in a very small file size (in KBs), enables copy/paste, and renders perfect Hindi characters.
-                  </li>
-                  <li>
-                    <strong>साफ लिखावट और कॉपी करने योग्य PDF के लिए:</strong> <strong>"Print PDF / Save"</strong> बटन पर क्लिक करें और प्रिंट विकल्प में <strong>"Save as PDF"</strong> चुनें। इससे फाइल का साइज बहुत छोटा बनेगा और हिंदी के अक्षर बिल्कुल सही (Devanagari script) दिखेंगे।
-                  </li>
-                  <li>
-                    <strong>Hindi in Excel:</strong> To get Excel sheets in Hindi, use the <strong>"Translate Column to Hindi"</strong> widget above first, then click download.
-                  </li>
-                </ul>
-              </div>
-
               {/* Actions panel */}
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
