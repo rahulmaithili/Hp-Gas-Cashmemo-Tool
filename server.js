@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Papa from 'papaparse';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -292,20 +293,37 @@ app.delete('/api/delete-file', (req, res) => {
   }
 });
 
-// Translate proxy — avoids CORS when browser fetches translate.googleapis.com directly
+// Translate proxy — tries Google Translate first, falls back to MyMemory API
 app.post('/api/translate', async (req, res) => {
   const { text, sl = 'en', tl = 'hi' } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
 
+  // ── Attempt 1: Google Translate unofficial endpoint (gtx) ──
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Google Translate returned ${response.status}`);
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    console.error('Translation proxy error:', err.message);
-    res.status(502).json({ error: 'Translation service unavailable: ' + err.message });
+    const googleUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+    const googleRes = await axios.get(googleUrl, { timeout: 10000 });
+    console.log('[translate] Google Translate OK');
+    return res.json(googleRes.data);
+  } catch (googleErr) {
+    console.warn('[translate] Google Translate failed:', googleErr.message, '— trying MyMemory fallback...');
+  }
+
+  // ── Attempt 2: MyMemory free API (no key required, CORS-safe from server) ──
+  try {
+    const lines = text.split('\n');
+    // MyMemory works best line-by-line for numbered lists; translate all at once first
+    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sl}|${tl}`;
+    const mmRes = await axios.get(myMemoryUrl, { timeout: 15000 });
+    const translated = mmRes.data?.responseData?.translatedText || text;
+
+    // Reformat into Google Translate-compatible structure so frontend code works unchanged
+    // result[0] = array of [translatedChunk, originalChunk, ...]
+    const googleLikeResult = [[[ translated, text ]]];
+    console.log('[translate] MyMemory fallback OK');
+    return res.json(googleLikeResult);
+  } catch (mmErr) {
+    console.error('[translate] MyMemory also failed:', mmErr.message);
+    return res.status(502).json({ error: 'Both translation services unavailable. Check server internet connectivity.' });
   }
 });
 

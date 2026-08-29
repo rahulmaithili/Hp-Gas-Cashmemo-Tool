@@ -633,9 +633,17 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: queryText, sl: 'en', tl: 'hi' })
         });
-        if (!res.ok) throw new Error('Translation API request failed');
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Server returned ${res.status}`);
+        }
+
         const result = await res.json();
 
+        // Build full translated text — works for both:
+        //   Google Translate: result[0] = [[chunk, orig], [chunk2, orig2], ...]
+        //   MyMemory fallback: result[0] = [[ "full translated string", original ]]
         let translatedText = '';
         if (result && result[0]) {
           translatedText = result[0].map(item => item[0]).join('');
@@ -650,7 +658,7 @@ export default function App() {
             return hDigits[parseInt(char, 10)] || char;
           }).join('') + '.';
 
-          // Find if there is a line starting with this prefix
+          // Find the line starting with this item's prefix
           const matchingLine = translatedLines.find(line => {
             const trimmed = line.trim();
             return trimmed.startsWith(engPrefix) || trimmed.startsWith(hindiPrefix);
@@ -668,7 +676,7 @@ export default function App() {
         });
 
         setTranslationProgress(Math.min(100, Math.round(((i + batchSize) / totalRows) * 100)));
-        await new Promise(resolve => setTimeout(resolve, 80));
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       // Build final immutable state from translation map
@@ -686,8 +694,8 @@ export default function App() {
       });
       showToast(`${translationColumn} column translated to Hindi successfully for ${totalRows} records!`, 'success');
     } catch (err) {
-      console.error(err);
-      showToast('Translation failed. Please try smaller filters or check connection.', 'error');
+      console.error('[translate] Error:', err);
+      showToast(`Translation failed: ${err.message}`, 'error');
     } finally {
       setTranslationLoading(false);
       setTranslationProgress(0);
