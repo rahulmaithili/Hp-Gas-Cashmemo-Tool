@@ -611,8 +611,11 @@ export default function App() {
     });
 
     const rowsToTranslate = Array.from(indicesToTranslate).map(idx => updatedData[idx]);
-    const batchSize = 30; 
+    const batchSize = 30;
     const totalRows = rowsToTranslate.length;
+
+    // Map to collect translated values — avoids direct row mutation (React anti-pattern)
+    const translationMap = new Map();
 
     try {
       for (let i = 0; i < totalRows; i += batchSize) {
@@ -624,8 +627,12 @@ export default function App() {
         
         if (queryText.trim() === '') continue;
 
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q=${encodeURIComponent(queryText)}`;
-        const res = await fetch(url);
+        // Route through backend proxy to avoid CORS block in browser
+        const res = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: queryText, sl: 'en', tl: 'hi' })
+        });
         if (!res.ok) throw new Error('Translation API request failed');
         const result = await res.json();
 
@@ -650,13 +657,12 @@ export default function App() {
           });
 
           if (matchingLine) {
-            // Strip the number prefix
-            row[translationColumn] = matchingLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim();
+            translationMap.set(row, matchingLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
           } else {
             // Fallback to index-based line if numbering layout is corrupted
             const fallbackLine = translatedLines[idx];
             if (fallbackLine) {
-              row[translationColumn] = fallbackLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim();
+              translationMap.set(row, fallbackLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
             }
           }
         });
@@ -665,7 +671,15 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 80));
       }
 
-      setData(updatedData);
+      // Build final immutable state from translation map
+      const finalData = updatedData.map(row => {
+        if (translationMap.has(row)) {
+          return { ...row, [translationColumn]: translationMap.get(row) };
+        }
+        return row;
+      });
+
+      setData(finalData);
       setHasTranslatedColumn({
         ...hasTranslatedColumn,
         [translationColumn]: true

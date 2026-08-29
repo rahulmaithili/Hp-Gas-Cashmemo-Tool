@@ -292,6 +292,23 @@ app.delete('/api/delete-file', (req, res) => {
   }
 });
 
+// Translate proxy — avoids CORS when browser fetches translate.googleapis.com directly
+app.post('/api/translate', async (req, res) => {
+  const { text, sl = 'en', tl = 'hi' } = req.body;
+  if (!text) return res.status(400).json({ error: 'text is required' });
+
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Google Translate returned ${response.status}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Translation proxy error:', err.message);
+    res.status(502).json({ error: 'Translation service unavailable: ' + err.message });
+  }
+});
+
 // Settings API
 app.get('/api/settings', (req, res) => {
   res.json(loadSettings());
