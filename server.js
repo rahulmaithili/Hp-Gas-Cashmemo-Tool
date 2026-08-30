@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Papa from 'papaparse';
 import axios from 'axios';
+import { translate as googleTranslate } from '@vitalets/google-translate-api';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -293,39 +294,75 @@ app.delete('/api/delete-file', (req, res) => {
   }
 });
 
-// Translate proxy — tries Google Translate first, falls back to MyMemory API
+
+// ─────────────────────────────────────────────────────────────
+// Helper: convert @vitalets result → Google-like response array
+// so frontend parsing code stays unchanged
+// ─────────────────────────────────────────────────────────────
+function toGoogleFormat(translatedText, originalText) {
+  // Split on newlines and re-pair so the numbered-list parser works
+  const transLines = translatedText.split('\n');
+  const origLines  = originalText.split('\n');
+  const pairs = transLines.map((t, i) => [t, origLines[i] || '']);
+  return [pairs];
+}
+
+// Translate proxy — 4-layer fallback for maximum reliability on cloud servers
 app.post('/api/translate', async (req, res) => {
   const { text, sl = 'en', tl = 'hi' } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
 
-  // ── Attempt 1: Google Translate unofficial endpoint (gtx) ──
+  // ── Layer 1: @vitalets/google-translate-api (npm, uses auth token) ──
   try {
-    const googleUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
-    const googleRes = await axios.get(googleUrl, { timeout: 10000 });
-    console.log('[translate] Google Translate OK');
-    return res.json(googleRes.data);
-  } catch (googleErr) {
-    console.warn('[translate] Google Translate failed:', googleErr.message, '— trying MyMemory fallback...');
+    const result = await googleTranslate(text, { from: sl, to: tl });
+    console.log('[translate] Layer1 @vitalets OK');
+    return res.json(toGoogleFormat(result.text, text));
+  } catch (e1) {
+    console.warn('[translate] Layer1 @vitalets failed:', e1.message);
   }
 
-  // ── Attempt 2: MyMemory free API (no key required, CORS-safe from server) ──
+  // ── Layer 2: Lingva public instance 1 ──
   try {
-    const lines = text.split('\n');
-    // MyMemory works best line-by-line for numbered lists; translate all at once first
-    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sl}|${tl}`;
-    const mmRes = await axios.get(myMemoryUrl, { timeout: 15000 });
-    const translated = mmRes.data?.responseData?.translatedText || text;
-
-    // Reformat into Google Translate-compatible structure so frontend code works unchanged
-    // result[0] = array of [translatedChunk, originalChunk, ...]
-    const googleLikeResult = [[[ translated, text ]]];
-    console.log('[translate] MyMemory fallback OK');
-    return res.json(googleLikeResult);
-  } catch (mmErr) {
-    console.error('[translate] MyMemory also failed:', mmErr.message);
-    return res.status(502).json({ error: 'Both translation services unavailable. Check server internet connectivity.' });
+    const lingvaUrl = `https://lingva.ml/api/v1/${sl}/${tl}/${encodeURIComponent(text)}`;
+    const r2 = await axios.get(lingvaUrl, { timeout: 12000 });
+    const translated = r2.data?.translation;
+    if (!translated) throw new Error('empty response');
+    console.log('[translate] Layer2 Lingva-1 OK');
+    return res.json(toGoogleFormat(translated, text));
+  } catch (e2) {
+    console.warn('[translate] Layer2 Lingva-1 failed:', e2.message);
   }
+
+  // ── Layer 3: Lingva public instance 2 ──
+  try {
+    const lingva2Url = `https://translate.plausibility.cloud/api/v1/${sl}/${tl}/${encodeURIComponent(text)}`;
+    const r3 = await axios.get(lingva2Url, { timeout: 12000 });
+    const translated = r3.data?.translation;
+    if (!translated) throw new Error('empty response');
+    console.log('[translate] Layer3 Lingva-2 OK');
+    return res.json(toGoogleFormat(translated, text));
+  } catch (e3) {
+    console.warn('[translate] Layer3 Lingva-2 failed:', e3.message);
+  }
+
+  // ── Layer 4: MyMemory free API ──
+  try {
+    const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sl}|${tl}`;
+    const r4 = await axios.get(mmUrl, { timeout: 15000 });
+    const translated = r4.data?.responseData?.translatedText;
+    if (!translated) throw new Error('empty response');
+    console.log('[translate] Layer4 MyMemory OK');
+    return res.json(toGoogleFormat(translated, text));
+  } catch (e4) {
+    console.error('[translate] Layer4 MyMemory failed:', e4.message);
+  }
+
+  // All layers exhausted
+  return res.status(502).json({
+    error: 'All translation services failed. Server may not have internet access.'
+  });
 });
+
 
 // Settings API
 app.get('/api/settings', (req, res) => {
