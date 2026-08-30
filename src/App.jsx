@@ -617,36 +617,80 @@ export default function App() {
     // Map to collect translated values — avoids direct row mutation (React anti-pattern)
     const translationMap = new Map();
 
+    // ── Browser-side translation helper (for when server has no internet) ──
+    // Translates a batch of numbered lines using a CORS-enabled public API
+    const translateBatchBrowser = async (queryText, sl, tl) => {
+      // Browser Layer 1: Lingva.ml (open-source, CORS-enabled)
+      try {
+        const url = `https://lingva.ml/api/v1/${sl}/${tl}/${encodeURIComponent(queryText)}`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
+        if (!r.ok) throw new Error(`Lingva1 ${r.status}`);
+        const d = await r.json();
+        if (!d?.translation) throw new Error('empty');
+        return d.translation;
+      } catch (e1) {
+        console.warn('[translate-browser] Lingva-1 failed:', e1.message);
+      }
+
+      // Browser Layer 2: Second Lingva instance
+      try {
+        const url2 = `https://translate.plausibility.cloud/api/v1/${sl}/${tl}/${encodeURIComponent(queryText)}`;
+        const r2 = await fetch(url2, { signal: AbortSignal.timeout(12000) });
+        if (!r2.ok) throw new Error(`Lingva2 ${r2.status}`);
+        const d2 = await r2.json();
+        if (!d2?.translation) throw new Error('empty');
+        return d2.translation;
+      } catch (e2) {
+        console.warn('[translate-browser] Lingva-2 failed:', e2.message);
+      }
+
+      // Browser Layer 3: MyMemory (CORS-enabled)
+      try {
+        const url3 = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sl}|${tl}`;
+        const r3 = await fetch(url3, { signal: AbortSignal.timeout(15000) });
+        if (!r3.ok) throw new Error(`MyMemory ${r3.status}`);
+        const d3 = await r3.json();
+        const t = d3?.responseData?.translatedText;
+        if (!t) throw new Error('empty');
+        return t;
+      } catch (e3) {
+        console.warn('[translate-browser] MyMemory failed:', e3.message);
+      }
+
+      throw new Error('सभी translation services उपलब्ध नहीं हैं। कृपया internet connection जाँचें।');
+    };
+
     try {
       for (let i = 0; i < totalRows; i += batchSize) {
         const batch = rowsToTranslate.slice(i, i + batchSize);
 
-        // Prepend sequential number to prevent Google Translate from merging rows
+        // Prepend sequential number to prevent translation from merging rows
         const texts = batch.map((row, idx) => `${idx + 1}. ${row[backupKey] || row[translationColumn] || ' '}`);
         const queryText = texts.join('\n');
-        
+
         if (queryText.trim() === '') continue;
 
-        // Route through backend proxy to avoid CORS block in browser
-        const res = await fetch('/api/translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: queryText, sl: 'en', tl: 'hi' })
-        });
-
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.error || `Server returned ${res.status}`);
-        }
-
-        const result = await res.json();
-
-        // Build full translated text — works for both:
-        //   Google Translate: result[0] = [[chunk, orig], [chunk2, orig2], ...]
-        //   MyMemory fallback: result[0] = [[ "full translated string", original ]]
         let translatedText = '';
-        if (result && result[0]) {
-          translatedText = result[0].map(item => item[0]).join('');
+
+        // ── Primary: server-side proxy (handles CORS + auth token) ──
+        try {
+          const res = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: queryText, sl: 'en', tl: 'hi' })
+          });
+          if (res.ok) {
+            const result = await res.json();
+            if (result && result[0]) {
+              translatedText = result[0].map(item => item[0]).join('');
+            }
+          } else {
+            throw new Error(`server ${res.status}`);
+          }
+        } catch (serverErr) {
+          console.warn('[translate] Server proxy failed:', serverErr.message, '— trying browser APIs...');
+          // ── Fallback: browser-direct APIs (CORS-enabled) ──
+          translatedText = await translateBatchBrowser(queryText, 'en', 'hi');
         }
 
         const translatedLines = translatedText.split('\n');
@@ -658,7 +702,6 @@ export default function App() {
             return hDigits[parseInt(char, 10)] || char;
           }).join('') + '.';
 
-          // Find the line starting with this item's prefix
           const matchingLine = translatedLines.find(line => {
             const trimmed = line.trim();
             return trimmed.startsWith(engPrefix) || trimmed.startsWith(hindiPrefix);
@@ -667,7 +710,6 @@ export default function App() {
           if (matchingLine) {
             translationMap.set(row, matchingLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
           } else {
-            // Fallback to index-based line if numbering layout is corrupted
             const fallbackLine = translatedLines[idx];
             if (fallbackLine) {
               translationMap.set(row, fallbackLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
