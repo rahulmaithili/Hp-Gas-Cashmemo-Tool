@@ -296,15 +296,13 @@ app.delete('/api/delete-file', (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────
-// Helper: convert @vitalets result → Google-like response array
-// so frontend parsing code stays unchanged
+// Helper: convert translated text → Google-like response array
+// Frontend does: result[0].map(item => item[0]).join('')
+// So we must keep \n inside the text — return as ONE chunk
 // ─────────────────────────────────────────────────────────────
 function toGoogleFormat(translatedText, originalText) {
-  // Split on newlines and re-pair so the numbered-list parser works
-  const transLines = translatedText.split('\n');
-  const origLines  = originalText.split('\n');
-  const pairs = transLines.map((t, i) => [t, origLines[i] || '']);
-  return [pairs];
+  // Single chunk preserves embedded \n so frontend split('\n') works correctly
+  return [[[translatedText, originalText]]];
 }
 
 // Translate proxy — 4-layer fallback for maximum reliability on cloud servers
