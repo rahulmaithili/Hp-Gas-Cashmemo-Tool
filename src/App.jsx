@@ -1565,9 +1565,10 @@ export default function App() {
           <>
             {/* Stats row */}
             <div className="stats-grid">
-              <div className="stat-card">
+              {/* Card 1 — Blue: Matching Filters */}
+              <div className="stat-card kpi-blue">
                 <div className="stat-icon">
-                  <Filter size={22} />
+                  <Filter size={24} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Matching Filters</span>
@@ -1575,9 +1576,10 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="stat-card">
-                <div className="stat-icon accent">
-                  <CheckSquare size={22} />
+              {/* Card 2 — Violet: Checked for Export */}
+              <div className="stat-card kpi-violet">
+                <div className="stat-icon">
+                  <CheckSquare size={24} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Checked for Export</span>
@@ -1585,9 +1587,10 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="stat-card">
-                <div className="stat-icon" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)' }}>
-                  <Users size={22} />
+              {/* Card 3 — Emerald: Active Cylinders */}
+              <div className="stat-card kpi-emerald">
+                <div className="stat-icon">
+                  <Users size={24} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Active Cylinders</span>
@@ -1595,10 +1598,11 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Card 4 — Amber: Total to Collect (only when rates visible) */}
               {includeRatesAndSignature && (
-                <div className="stat-card">
-                  <div className="stat-icon" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)' }}>
-                    <Coins size={22} />
+                <div className="stat-card kpi-amber">
+                  <div className="stat-icon">
+                    <Coins size={24} />
                   </div>
                   <div className="stat-info">
                     <span className="stat-label">Total to Collect</span>
@@ -1607,6 +1611,7 @@ export default function App() {
                 </div>
               )}
             </div>
+
 
             {/* Filter Panel */}
             <div className="card">
