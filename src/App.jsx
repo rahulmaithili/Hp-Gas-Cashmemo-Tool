@@ -570,31 +570,30 @@ export default function App() {
   const handleTranslateColumn = async () => {
     if (data.length === 0) return;
 
-    // Determine target indices to translate based on selection or filters
+    // Determine target rows to translate:
+    // ALWAYS respect current area / search filter & selection!
+    // If specific rows in current filtered view are checked, translate those (activeSelectedRows).
+    // If none checked in filter, translate all rows in current filteredData.
+    const targetRows = activeSelectedRows.length > 0 
+      ? activeSelectedRows 
+      : (filteredData.length > 0 ? filteredData : data);
+
     const indicesToTranslate = new Set();
-    if (selectedRows.size > 0) {
-      selectedRows.forEach(idx => {
-        if (idx >= 0 && idx < data.length) {
-          indicesToTranslate.add(idx);
-        }
-      });
-    } else {
-      filteredData.forEach(row => {
-        const idx = data.indexOf(row);
-        if (idx !== -1) {
-          indicesToTranslate.add(idx);
-        }
-      });
-    }
+    targetRows.forEach(row => {
+      const idx = data.indexOf(row);
+      if (idx !== -1) {
+        indicesToTranslate.add(idx);
+      }
+    });
 
     if (indicesToTranslate.size === 0) {
-      showToast('No matching records found to translate.', 'warning');
+      showToast('No matching records found to translate in current filter.', 'warning');
       return;
     }
 
     setTranslationLoading(true);
     setTranslationProgress(0);
-    showToast(`Translating ${translationColumn} column to Hindi for ${indicesToTranslate.size} records...`, 'info');
+    showToast(`Translating ${translationColumn} column to Hindi for ${indicesToTranslate.size} record(s)...`, 'info');
 
     const backupKey = `original_${translationColumn}`;
     
@@ -611,53 +610,42 @@ export default function App() {
     });
 
     const rowsToTranslate = Array.from(indicesToTranslate).map(idx => updatedData[idx]);
-    const batchSize = 30;
+    const batchSize = 15; // 15 records per batch for fast, reliable translation
     const totalRows = rowsToTranslate.length;
 
     // Map to collect translated values — avoids direct row mutation (React anti-pattern)
     const translationMap = new Map();
 
     // ── Browser-side translation helper (for when server has no internet) ──
-    // Translates a batch of numbered lines using a CORS-enabled public API
     const translateBatchBrowser = async (queryText, sl, tl) => {
-      // Browser Layer 1: Lingva.ml (open-source, CORS-enabled)
+      // Browser Layer 1: MyMemory (CORS-enabled, 15 records easily fits under 500 chars limit)
       try {
-        const url = `https://lingva.ml/api/v1/${sl}/${tl}/${encodeURIComponent(queryText)}`;
-        const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
-        if (!r.ok) throw new Error(`Lingva1 ${r.status}`);
-        const d = await r.json();
-        if (!d?.translation) throw new Error('empty');
-        return d.translation;
+        const url1 = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sl}|${tl}`;
+        const r1 = await fetch(url1, { signal: AbortSignal.timeout(12000) });
+        if (r1.ok) {
+          const d1 = await r1.json();
+          const t1 = d1?.responseData?.translatedText;
+          if (t1 && d1?.responseStatus === 200) {
+            return t1;
+          }
+        }
       } catch (e1) {
-        console.warn('[translate-browser] Lingva-1 failed:', e1.message);
+        console.warn('[translate-browser] MyMemory failed:', e1.message);
       }
 
-      // Browser Layer 2: Second Lingva instance
+      // Browser Layer 2: Lingva fallback
       try {
         const url2 = `https://translate.plausibility.cloud/api/v1/${sl}/${tl}/${encodeURIComponent(queryText)}`;
         const r2 = await fetch(url2, { signal: AbortSignal.timeout(12000) });
-        if (!r2.ok) throw new Error(`Lingva2 ${r2.status}`);
-        const d2 = await r2.json();
-        if (!d2?.translation) throw new Error('empty');
-        return d2.translation;
+        if (r2.ok) {
+          const d2 = await r2.json();
+          if (d2?.translation) return d2.translation;
+        }
       } catch (e2) {
-        console.warn('[translate-browser] Lingva-2 failed:', e2.message);
+        console.warn('[translate-browser] Lingva fallback failed:', e2.message);
       }
 
-      // Browser Layer 3: MyMemory (CORS-enabled)
-      try {
-        const url3 = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sl}|${tl}`;
-        const r3 = await fetch(url3, { signal: AbortSignal.timeout(15000) });
-        if (!r3.ok) throw new Error(`MyMemory ${r3.status}`);
-        const d3 = await r3.json();
-        const t = d3?.responseData?.translatedText;
-        if (!t) throw new Error('empty');
-        return t;
-      } catch (e3) {
-        console.warn('[translate-browser] MyMemory failed:', e3.message);
-      }
-
-      throw new Error('सभी translation services उपलब्ध नहीं हैं। कृपया internet connection जाँचें।');
+      throw new Error('All translation services unavailable. Please check your connection.');
     };
 
     try {
@@ -672,7 +660,7 @@ export default function App() {
 
         let translatedText = '';
 
-        // ── Primary: server-side proxy (handles CORS + auth token) ──
+        // ── Primary: server-side proxy (Google Translate with fallback layers) ──
         try {
           const res = await fetch('/api/translate', {
             method: 'POST',
@@ -685,26 +673,28 @@ export default function App() {
               translatedText = result[0].map(item => item[0]).join('');
             }
           } else {
-            throw new Error(`server ${res.status}`);
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Server ${res.status}`);
           }
         } catch (serverErr) {
-          console.warn('[translate] Server proxy failed:', serverErr.message, '— trying browser APIs...');
-          // ── Fallback: browser-direct APIs (CORS-enabled) ──
+          console.warn('[translate] Server proxy failed:', serverErr.message, '— trying browser fallback...');
           translatedText = await translateBatchBrowser(queryText, 'en', 'hi');
         }
 
         const translatedLines = translatedText.split('\n');
 
         batch.forEach((row, idx) => {
-          const engPrefix = `${idx + 1}.`;
-          const hindiPrefix = `${idx + 1}`.split('').map(char => {
-            const hDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
-            return hDigits[parseInt(char, 10)] || char;
-          }).join('') + '.';
+          const itemNum = idx + 1;
+          const engPrefix = `${itemNum}`;
+          const hDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+          const hindiPrefix = `${itemNum}`.split('').map(c => hDigits[parseInt(c, 10)] || c).join('');
 
           const matchingLine = translatedLines.find(line => {
             const trimmed = line.trim();
-            return trimmed.startsWith(engPrefix) || trimmed.startsWith(hindiPrefix);
+            return trimmed.startsWith(`${engPrefix}.`) || 
+                   trimmed.startsWith(`${engPrefix} `) || 
+                   trimmed.startsWith(`${hindiPrefix}.`) || 
+                   trimmed.startsWith(`${hindiPrefix} `);
           });
 
           if (matchingLine) {
@@ -718,7 +708,7 @@ export default function App() {
         });
 
         setTranslationProgress(Math.min(100, Math.round(((i + batchSize) / totalRows) * 100)));
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
 
       // Build final immutable state from translation map
@@ -1949,7 +1939,7 @@ export default function App() {
                   onClick={handleTranslateColumn}
                   disabled={translationLoading}
                 >
-                  Translate to Hindi (बदलें)
+                  Translate to Hindi ({activeSelectedRows.length > 0 ? activeSelectedRows.length : filteredData.length})
                 </button>
 
                 {hasTranslatedColumn[translationColumn] && (

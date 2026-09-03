@@ -305,52 +305,70 @@ function toGoogleFormat(translatedText, originalText) {
   return [[[translatedText, originalText]]];
 }
 
-// Translate proxy — 4-layer fallback for maximum reliability on cloud servers
+// Translate proxy — multi-layer fallback for maximum reliability on cloud servers
 app.post('/api/translate', async (req, res) => {
   const { text, sl = 'en', tl = 'hi' } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
 
-  // ── Layer 1: @vitalets/google-translate-api (npm, uses auth token) ──
+  // ── Layer 1: @vitalets/google-translate-api (uses Google RPC with token) ──
   try {
     const result = await googleTranslate(text, { from: sl, to: tl });
-    console.log('[translate] Layer1 @vitalets OK');
-    return res.json(toGoogleFormat(result.text, text));
+    if (result && result.text) {
+      console.log('[translate] Layer1 @vitalets OK');
+      return res.json(toGoogleFormat(result.text, text));
+    }
   } catch (e1) {
     console.warn('[translate] Layer1 @vitalets failed:', e1.message);
   }
 
-  // ── Layer 2: Lingva public instance 1 ──
+  // ── Layer 2: Google Mobile Web translate (extremely reliable, no token needed) ──
   try {
-    const lingvaUrl = `https://lingva.ml/api/v1/${sl}/${tl}/${encodeURIComponent(text)}`;
-    const r2 = await axios.get(lingvaUrl, { timeout: 12000 });
-    const translated = r2.data?.translation;
-    if (!translated) throw new Error('empty response');
-    console.log('[translate] Layer2 Lingva-1 OK');
-    return res.json(toGoogleFormat(translated, text));
+    const googleMobileUrl = `https://translate.google.com/m?sl=${sl}&tl=${tl}&q=${encodeURIComponent(text)}`;
+    const gmRes = await axios.get(googleMobileUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'hi,en-US;q=0.9,en;q=0.8'
+      },
+      timeout: 10000
+    });
+    const match = gmRes.data.match(/<div[^>]*class=["']result-container["'][^>]*>([\s\S]*?)<\/div>/i);
+    if (match && match[1]) {
+      const cleaned = match[1]
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+      console.log('[translate] Layer2 Google Mobile OK');
+      return res.json(toGoogleFormat(cleaned, text));
+    }
   } catch (e2) {
-    console.warn('[translate] Layer2 Lingva-1 failed:', e2.message);
+    console.warn('[translate] Layer2 Google Mobile failed:', e2.message);
   }
 
-  // ── Layer 3: Lingva public instance 2 ──
+  // ── Layer 3: Google gtx unofficial endpoint ──
   try {
-    const lingva2Url = `https://translate.plausibility.cloud/api/v1/${sl}/${tl}/${encodeURIComponent(text)}`;
-    const r3 = await axios.get(lingva2Url, { timeout: 12000 });
-    const translated = r3.data?.translation;
-    if (!translated) throw new Error('empty response');
-    console.log('[translate] Layer3 Lingva-2 OK');
-    return res.json(toGoogleFormat(translated, text));
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+    const gtxRes = await axios.get(gtxUrl, { timeout: 10000 });
+    if (gtxRes.data && gtxRes.data[0]) {
+      const translated = gtxRes.data[0].map(item => item[0]).join('');
+      console.log('[translate] Layer3 Google gtx OK');
+      return res.json(toGoogleFormat(translated, text));
+    }
   } catch (e3) {
-    console.warn('[translate] Layer3 Lingva-2 failed:', e3.message);
+    console.warn('[translate] Layer3 Google gtx failed:', e3.message);
   }
 
   // ── Layer 4: MyMemory free API ──
   try {
     const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sl}|${tl}`;
-    const r4 = await axios.get(mmUrl, { timeout: 15000 });
+    const r4 = await axios.get(mmUrl, { timeout: 12000 });
     const translated = r4.data?.responseData?.translatedText;
-    if (!translated) throw new Error('empty response');
-    console.log('[translate] Layer4 MyMemory OK');
-    return res.json(toGoogleFormat(translated, text));
+    if (translated && r4.data?.responseStatus === 200) {
+      console.log('[translate] Layer4 MyMemory OK');
+      return res.json(toGoogleFormat(translated, text));
+    }
   } catch (e4) {
     console.error('[translate] Layer4 MyMemory failed:', e4.message);
   }
