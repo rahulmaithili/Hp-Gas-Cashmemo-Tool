@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import { translate as googleTranslate } from '@vitalets/google-translate-api';
 
 function toGoogleFormat(translatedText, originalText) {
@@ -47,8 +47,8 @@ export default async function handler(req, res) {
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '\"')
-        .replace(/&#39;/g, \"'\")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
         .trim();
       return res.status(200).json(toGoogleFormat(cleaned, text));
     }
