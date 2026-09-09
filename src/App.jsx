@@ -4,7 +4,7 @@ import {
   RefreshCw, FileSpreadsheet, CheckCircle2, X, ChevronLeft, 
   ChevronRight, Info, Coins, Users, MapPin, CheckSquare, Square,
   Printer, Upload, Filter, ListCheck, UserCheck, Languages, AlertCircle,
-  Trash2, Type, Send, UserPlus, Copy, Calendar
+  Trash2, Type, Send, UserPlus, Copy, Calendar, KeyRound, ShieldCheck, ShieldAlert, ExternalLink
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
@@ -110,11 +110,166 @@ export default function App() {
   const ekycRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // License & Subscription states
+  const [licenseInfo, setLicenseInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hp_gas_license');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
+  const [licenseKeyInput, setLicenseKeyInput] = useState('');
+  const [licenseValidating, setLicenseValidating] = useState(false);
+  const [licenseError, setLicenseError] = useState('');
+
+  // Device ID helper (persisted per browser instance)
+  const getDeviceId = () => {
+    try {
+      let id = localStorage.getItem('hp_gas_device_id');
+      if (!id) {
+        id = 'HPGAS-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
+        localStorage.setItem('hp_gas_device_id', id);
+      }
+      return id;
+    } catch (e) {
+      return 'HPGAS-BROWSER';
+    }
+  };
+
+  // Helper to check if a license is currently active & not expired
+  const isLicenseActive = (lic = licenseInfo) => {
+    if (!lic || lic.status !== 'active') return false;
+    if (lic.expiry) {
+      const expDate = new Date(lic.expiry + 'T23:59:59');
+      if (Date.now() > expDate.getTime()) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Calculate days remaining on license
+  const getLicenseDaysLeft = (lic = licenseInfo) => {
+    if (!lic || !lic.expiry) return 0;
+    const expDate = new Date(lic.expiry + 'T23:59:59');
+    const diffTime = expDate.getTime() - Date.now();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  // Verify license key with Google Apps Script API endpoint
+  const verifyLicenseKey = async (rawKey, isSilent = false) => {
+    const key = (rawKey || '').trim().toUpperCase();
+    if (!key) {
+      if (!isSilent) setLicenseError('Please enter a valid License Key.');
+      return false;
+    }
+
+    if (!isSilent) {
+      setLicenseValidating(true);
+      setLicenseError('');
+    }
+
+    try {
+      const deviceId = getDeviceId();
+      const apiUrl = `https://script.google.com/macros/s/AKfycbyniiGJoVV3_P2KKifUfw-8U8E-1EnYGEKpc3wByfdsmKKDKkedI87UR5nS4SUln3aE/exec?action=verify_license&licenseKey=${encodeURIComponent(key)}&t=${Date.now()}`;
+      
+      const response = await fetch(apiUrl, { redirect: 'follow' });
+      const data = await response.json();
+
+      if (data.status === 'active') {
+        const newLicense = {
+          key,
+          status: 'active',
+          name: data.name || '',
+          company: data.company || '',
+          expiry: data.expiry || '',
+          lastVerified: Date.now()
+        };
+        setLicenseInfo(newLicense);
+        localStorage.setItem('hp_gas_license', JSON.stringify(newLicense));
+        
+        // Auto-update agency name if licensed company is provided
+        if (data.company && (!settings.agencyName || settings.agencyName.trim() === '')) {
+          const updated = { ...settings, agencyName: data.company };
+          setSettings(updated);
+          setTempSettings(updated);
+          saveSettingsQuietly(updated);
+        }
+
+        if (!isSilent) {
+          setIsLicenseModalOpen(false);
+          setLicenseKeyInput('');
+          showToast(`License activated successfully! Valid until ${data.expiry}`);
+        }
+        return true;
+      } else {
+        const errorMsg = data.message || (data.status === 'expired' ? 'License key has expired. Please renew.' : 'Invalid license key.');
+        if (!isSilent) {
+          setLicenseError(errorMsg);
+        }
+        // If expired or blocked online, update state
+        if (licenseInfo && licenseInfo.key === key) {
+          const updated = { ...licenseInfo, status: data.status, message: errorMsg };
+          setLicenseInfo(updated);
+          localStorage.setItem('hp_gas_license', JSON.stringify(updated));
+        }
+        return false;
+      }
+    } catch (err) {
+      console.error('License validation network error:', err);
+      // If offline or network error, verify against local expiry if already active
+      if (licenseInfo && licenseInfo.key === key && licenseInfo.status === 'active') {
+        if (isLicenseActive(licenseInfo)) {
+          if (!isSilent) {
+            setIsLicenseModalOpen(false);
+            showToast('Verified offline from local cache.');
+          }
+          return true;
+        }
+      }
+      if (!isSilent) {
+        setLicenseError('Failed to connect to license server. Please check internet connection.');
+      }
+      return false;
+    } finally {
+      if (!isSilent) {
+        setLicenseValidating(false);
+      }
+    }
+  };
+
   // Initialize Theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Check License on App Load
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('hp_gas_license');
+      if (saved) {
+        const lic = JSON.parse(saved);
+        setLicenseInfo(lic);
+        if (!isLicenseActive(lic)) {
+          setIsLicenseModalOpen(true);
+          setLicenseError('Your subscription license has expired. Please renew to continue.');
+        } else {
+          // If active, re-verify quietly in the background once every 24 hours
+          const lastVerified = lic.lastVerified || 0;
+          if (Date.now() - lastVerified > 24 * 60 * 60 * 1000) {
+            verifyLicenseKey(lic.key, true);
+          }
+        }
+      } else {
+        // No license installed: prompt user to enter key
+        setIsLicenseModalOpen(true);
+      }
+    } catch (e) {}
+  }, []);
 
   // Click outside listener for dropdowns
   useEffect(() => {
@@ -337,6 +492,13 @@ export default function App() {
   const handleLocalFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    if (!isLicenseActive()) {
+      setIsLicenseModalOpen(true);
+      setLicenseError('Active subscription license required to upload files and access dashboard.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -1129,11 +1291,21 @@ export default function App() {
 
   // PDF print trigger
   const handlePrintPdf = () => {
+    if (!isLicenseActive()) {
+      setIsLicenseModalOpen(true);
+      setLicenseError('Active subscription license required to print or export cashmemos.');
+      return;
+    }
     window.print();
   };
 
   // Direct PDF generation and download
   const handleDownloadPdfDirect = () => {
+    if (!isLicenseActive()) {
+      setIsLicenseModalOpen(true);
+      setLicenseError('Active subscription license required to download PDF.');
+      return;
+    }
     if (activeSelectedRows.length === 0) {
       showToast('Please select at least one booking (check the checkbox) to download. (कृपया डाउनलोड करने के लिए कम से कम एक बुकिंग टिक करें)', 'error');
       return;
@@ -1208,6 +1380,12 @@ export default function App() {
 
   // ExcelJS styling and file export
   const exportToExcel = async (groupByArea = true) => {
+    if (!isLicenseActive()) {
+      setIsLicenseModalOpen(true);
+      setLicenseError('Active subscription license required to export Excel files.');
+      return;
+    }
+
     if (activeSelectedRows.length === 0) {
       showToast('Please select at least one booking (check the checkbox) to export. (कृपया निर्यात करने के लिए कम से कम एक बुकिंग टिक करें)', 'error');
       return;
@@ -1571,7 +1749,14 @@ export default function App() {
 
           <button 
             className="btn btn-secondary" 
-            onClick={() => fileInputRef.current?.click()} 
+            onClick={() => {
+              if (!isLicenseActive()) {
+                setIsLicenseModalOpen(true);
+                setLicenseError('Active subscription license required to upload files.');
+                return;
+              }
+              fileInputRef.current?.click();
+            }} 
             style={{ gap: '0.375rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
             title="Upload any downloaded HP booking CSV directly in browser"
           >
@@ -1588,6 +1773,36 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          {/* License Status Badge */}
+          {licenseInfo && isLicenseActive(licenseInfo) ? (
+            <button 
+              className="license-badge active"
+              onClick={() => setIsLicenseModalOpen(true)}
+              title={`License active until ${licenseInfo.expiry}. Click to view details.`}
+            >
+              <ShieldCheck size={16} />
+              <span>Active ({getLicenseDaysLeft(licenseInfo)}d left)</span>
+            </button>
+          ) : licenseInfo && licenseInfo.expiry ? (
+            <button 
+              className="license-badge expired"
+              onClick={() => setIsLicenseModalOpen(true)}
+              title="License expired. Click to renew."
+            >
+              <ShieldAlert size={16} />
+              <span>License Expired</span>
+            </button>
+          ) : (
+            <button 
+              className="license-badge unlicensed"
+              onClick={() => setIsLicenseModalOpen(true)}
+              title="Click to enter license key and activate."
+            >
+              <KeyRound size={16} />
+              <span>Activate Pro</span>
+            </button>
+          )}
+
           <button className="btn btn-secondary" onClick={() => { setTempSettings({ ...settings }); setIsSettingsOpen(true); }}>
             <Settings size={18} />
             <span>Settings</span>
@@ -1628,7 +1843,14 @@ export default function App() {
             </p>
             <button 
               className="btn btn-primary" 
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (!isLicenseActive()) {
+                  setIsLicenseModalOpen(true);
+                  setLicenseError('Active subscription license required to upload files.');
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
               style={{ marginTop: '0.5rem', gap: '0.5rem' }}
             >
               <Upload size={18} />
@@ -2656,6 +2878,210 @@ export default function App() {
               <button className="btn btn-primary" onClick={handleSaveSettings}>
                 Save Configuration
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* License Activation & Management Modal */}
+      {isLicenseModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '520px', width: '92%' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <KeyRound size={22} style={{ color: 'var(--primary)' }} />
+                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>
+                  {licenseInfo && isLicenseActive(licenseInfo) ? 'Subscription License Active' : 'Software License Activation'}
+                </h2>
+              </div>
+              {/* Only allow closing if a valid active license is already in place */}
+              {licenseInfo && isLicenseActive(licenseInfo) && (
+                <button className="modal-close" onClick={() => setIsLicenseModalOpen(false)}>
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            <div className="modal-body" style={{ gap: '1.15rem' }}>
+              {/* If license is currently active, show its details */}
+              {licenseInfo && isLicenseActive(licenseInfo) ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', fontWeight: 700, fontSize: '1rem' }}>
+                    <ShieldCheck size={24} />
+                    <span>License Valid & Active</span>
+                  </div>
+
+                  <div className="license-card-info">
+                    <div className="license-info-row">
+                      <span className="license-info-label">Agency / Company:</span>
+                      <span className="license-info-val">{licenseInfo.company || 'HP Gas Agency'}</span>
+                    </div>
+                    <div className="license-info-row">
+                      <span className="license-info-label">Licensed User:</span>
+                      <span className="license-info-val">{licenseInfo.name || 'Pro User'}</span>
+                    </div>
+                    <div className="license-info-row">
+                      <span className="license-info-label">License Key:</span>
+                      <span className="license-info-val" style={{ fontFamily: 'monospace', letterSpacing: '0.04em' }}>
+                        {licenseInfo.key}
+                      </span>
+                    </div>
+                    <div className="license-info-row">
+                      <span className="license-info-label">Expiry Date:</span>
+                      <span className="license-info-val" style={{ color: 'var(--primary)' }}>
+                        {licenseInfo.expiry} ({getLicenseDaysLeft(licenseInfo)} days remaining)
+                      </span>
+                    </div>
+                    <div className="license-info-row">
+                      <span className="license-info-label">Device Status:</span>
+                      <span className="license-info-val" style={{ color: 'var(--success)' }}>
+                        Connected
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Update or Renew License Key:
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        type="text"
+                        className="input-control"
+                        placeholder="Enter New License Key"
+                        value={licenseKeyInput}
+                        onChange={(e) => setLicenseKeyInput(e.target.value.toUpperCase())}
+                        style={{ textTransform: 'uppercase', fontFamily: 'monospace' }}
+                      />
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => verifyLicenseKey(licenseKeyInput)}
+                        disabled={licenseValidating || !licenseKeyInput.trim()}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        {licenseValidating ? <RefreshCw className="animate-spin" size={16} /> : 'Update Key'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Unlicensed or Expired View */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.35rem', color: 'var(--text-primary)' }}>
+                      Enter Your Subscription License Key
+                    </h3>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      To process daily cashmemos, generate Hindi printouts, and export Excel reports, please enter your License Key below.
+                    </p>
+                  </div>
+
+                  {licenseError && (
+                    <div style={{
+                      backgroundColor: 'var(--danger-light)',
+                      border: '1px solid #fecaca',
+                      color: '#991b1b',
+                      padding: '0.75rem 1rem',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}>
+                      <ShieldAlert size={18} style={{ flexShrink: 0 }} />
+                      <span>{licenseError}</span>
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>License Key (लाइसेंस की):</label>
+                    <input
+                      type="text"
+                      className="input-control"
+                      placeholder="e.g. CDCMS-PR99-U61Z-GOFN-OBSG"
+                      value={licenseKeyInput}
+                      onChange={(e) => {
+                        setLicenseKeyInput(e.target.value.toUpperCase());
+                        setLicenseError('');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && licenseKeyInput.trim()) {
+                          verifyLicenseKey(licenseKeyInput);
+                        }
+                      }}
+                      style={{
+                        fontSize: '0.95rem',
+                        fontFamily: 'monospace',
+                        letterSpacing: '0.05em',
+                        textTransform: 'uppercase',
+                        padding: '0.625rem 0.75rem'
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => verifyLicenseKey(licenseKeyInput)}
+                    disabled={licenseValidating || !licenseKeyInput.trim()}
+                    style={{
+                      padding: '0.65rem 1rem',
+                      fontWeight: 700,
+                      gap: '0.5rem',
+                      justifyContent: 'center',
+                      fontSize: '0.95rem'
+                    }}
+                  >
+                    {licenseValidating ? (
+                      <>
+                        <RefreshCw className="animate-spin" size={18} />
+                        <span>Verifying License...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={18} />
+                        <span>Activate Software</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                      Don't have an active license key or expired?
+                    </span>
+                    <a
+                      href="https://licensescript.netlify.app/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="license-portal-btn"
+                      style={{ width: '100%' }}
+                    >
+                      <span>Get License on LicenseVault Portal</span>
+                      <ExternalLink size={16} />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Powered by LicenseVault Security
+              </span>
+              {licenseInfo && isLicenseActive(licenseInfo) ? (
+                <button className="btn btn-secondary" onClick={() => setIsLicenseModalOpen(false)}>
+                  Close
+                </button>
+              ) : (
+                <a
+                  href="https://licensescript.netlify.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                >
+                  <span>Renew Plan</span>
+                  <ExternalLink size={12} />
+                </a>
+              )}
             </div>
           </div>
         </div>
