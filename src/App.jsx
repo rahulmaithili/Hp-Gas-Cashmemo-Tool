@@ -206,21 +206,19 @@ export default function App() {
         }
         return true;
       } else {
-        const errorMsg = data.message || (data.status === 'expired' ? 'License key has expired. Please renew.' : 'Invalid license key.');
-        if (!isSilent) {
-          setLicenseError(errorMsg);
-        }
-        // If expired or blocked online, update state
-        if (licenseInfo && licenseInfo.key === key) {
-          const updated = { ...licenseInfo, status: data.status, message: errorMsg };
-          setLicenseInfo(updated);
-          localStorage.setItem('hp_gas_license', JSON.stringify(updated));
-        }
+        const errorMsg = data.message || (data.status === 'blocked' ? 'Your license has been locked/blocked by administrator.' : data.status === 'expired' ? 'License key has expired. Please renew.' : 'Invalid license key.');
+        setLicenseError(errorMsg);
+        setIsLicenseModalOpen(true);
+        
+        // Immediately lock license in memory and storage
+        const updated = { ...(licenseInfo || {}), key, status: data.status, message: errorMsg };
+        setLicenseInfo(updated);
+        localStorage.setItem('hp_gas_license', JSON.stringify(updated));
         return false;
       }
     } catch (err) {
       console.error('License validation network error:', err);
-      // If offline or network error, verify against local expiry if already active
+      // Only fallback to local cache if offline AND not explicitly blocked/invalid in storage
       if (licenseInfo && licenseInfo.key === key && licenseInfo.status === 'active') {
         if (isLicenseActive(licenseInfo)) {
           if (!isSilent) {
@@ -247,7 +245,7 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Check License on App Load
+  // Check & Verify License on App Load
   useEffect(() => {
     try {
       const saved = localStorage.getItem('hp_gas_license');
@@ -256,14 +254,10 @@ export default function App() {
         setLicenseInfo(lic);
         if (!isLicenseActive(lic)) {
           setIsLicenseModalOpen(true);
-          setLicenseError('Your subscription license has expired. Please renew to continue.');
-        } else {
-          // If active, re-verify quietly in the background once every 24 hours
-          const lastVerified = lic.lastVerified || 0;
-          if (Date.now() - lastVerified > 24 * 60 * 60 * 1000) {
-            verifyLicenseKey(lic.key, true);
-          }
+          setLicenseError(lic.message || 'Your subscription license has expired or is invalid. Please renew to continue.');
         }
+        // Always check status online with the server on load so admin blocks/locks apply immediately
+        verifyLicenseKey(lic.key, true);
       } else {
         // No license installed: prompt user to enter key
         setIsLicenseModalOpen(true);
@@ -1782,6 +1776,15 @@ export default function App() {
             >
               <ShieldCheck size={16} />
               <span>Active ({getLicenseDaysLeft(licenseInfo)}d left)</span>
+            </button>
+          ) : licenseInfo && licenseInfo.status === 'blocked' ? (
+            <button 
+              className="license-badge expired"
+              onClick={() => setIsLicenseModalOpen(true)}
+              title="License is locked by administrator. Click to view."
+            >
+              <ShieldAlert size={16} />
+              <span>License Locked</span>
             </button>
           ) : licenseInfo && licenseInfo.expiry ? (
             <button 
