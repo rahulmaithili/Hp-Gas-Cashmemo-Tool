@@ -165,6 +165,19 @@ export default function App() {
 
   // Fetch settings from API with localStorage fallback
   const fetchSettings = async () => {
+    // 1. Try localStorage first (fast & reliable on Vercel/offline)
+    try {
+      const saved = localStorage.getItem('hp_gas_settings');
+      if (saved) {
+        applyLoadedSettings(JSON.parse(saved));
+      }
+    } catch (e) {}
+
+    // On Vercel, localStorage is the primary store - skip backend call on initial load
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      return;
+    }
+
     try {
       const response = await fetch('/api/settings');
       if (response.ok) {
@@ -174,26 +187,22 @@ export default function App() {
             localStorage.setItem('hp_gas_settings', JSON.stringify(data));
           } catch (e) {}
           applyLoadedSettings(data);
-          return;
         }
       }
     } catch (err) {
-      console.warn('API settings not reachable, checking localStorage');
-    }
-
-    // Fallback to localStorage (works on Vercel, offline, or client-only)
-    try {
-      const saved = localStorage.getItem('hp_gas_settings');
-      if (saved) {
-        applyLoadedSettings(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.warn('Could not read localStorage settings');
+      // quiet fallback
     }
   };
 
-  // Fetch files in directory (graceful on Vercel/cloud)
+  // Fetch files in directory (on Vercel, skip directory scan since it's purely cloud/browser upload)
   const fetchFiles = async () => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      setCsvFiles([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch('/api/csv-files');
@@ -206,12 +215,9 @@ export default function App() {
           return;
         }
       }
-      // If no files in folder or running on Vercel cloud
       setCsvFiles([]);
       setError(null);
     } catch (err) {
-      // In cloud mode (like Vercel), local folder scanning doesn't exist - this is normal
-      console.log('No local backend directory, cloud upload mode active');
       setCsvFiles([]);
       setError(null);
     } finally {
@@ -1597,20 +1603,12 @@ export default function App() {
             <h3>Processing Booking Records...</h3>
             <p>Scanning addresses, parsing fields, and loading layout details.</p>
           </div>
-        ) : error ? (
-          <div className="card" style={{ borderColor: 'var(--danger)', backgroundColor: 'var(--danger-light)' }}>
-            <h3 style={{ color: 'var(--danger)', marginBottom: '0.5rem' }}>Error Loading Workspace Data</h3>
-            <p style={{ color: 'var(--text-secondary)' }}>{error}</p>
-            <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={fetchFiles}>
-              Retry Scanning Directory
-            </button>
-          </div>
         ) : data.length === 0 ? (
           <div className="empty-state" style={{ gap: '1rem' }}>
             <FileSpreadsheet size={48} style={{ color: 'var(--primary)', opacity: 0.8 }} />
             <h3>No Booking Records Loaded</h3>
             <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
-              The workspace folder does not contain any CSV files. Please upload your daily HP Gas refilling list below to get started.
+              Please upload your daily HP Gas refilling CSV file below to get started.
             </p>
             <button 
               className="btn btn-primary" 
