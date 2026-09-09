@@ -147,54 +147,74 @@ export default function App() {
     fetchFiles();
   }, []);
 
-  // Fetch settings from API
+  // Helper to normalize and apply loaded settings
+  const applyLoadedSettings = (data) => {
+    if (!data) return;
+    const merged = { ...settings, ...data };
+    if (!merged.columnFonts) merged.columnFonts = { ...settings.columnFonts };
+    if (!merged.vendors) merged.vendors = [];
+    if (!merged.rowsPerPrintPage) merged.rowsPerPrintPage = 15;
+    if (!merged.visibleColumns) {
+      merged.visibleColumns = { ...settings.visibleColumns };
+    } else {
+      merged.visibleColumns = { ...settings.visibleColumns, ...data.visibleColumns };
+    }
+    setSettings(merged);
+    setTempSettings(merged);
+  };
+
+  // Fetch settings from API with localStorage fallback
   const fetchSettings = async () => {
     try {
       const response = await fetch('/api/settings');
-      if (!response.ok) throw new Error('Failed to load settings');
-      const data = await response.json();
-      
-      // Fallbacks if missing
-      if (!data.columnFonts) {
-        data.columnFonts = { ...settings.columnFonts };
+      if (response.ok) {
+        const data = await response.json();
+        if (data) {
+          try {
+            localStorage.setItem('hp_gas_settings', JSON.stringify(data));
+          } catch (e) {}
+          applyLoadedSettings(data);
+          return;
+        }
       }
-      if (!data.vendors) {
-        data.vendors = [];
-      }
-      if (!data.rowsPerPrintPage) {
-        data.rowsPerPrintPage = 15;
-      }
-      if (!data.visibleColumns) {
-        data.visibleColumns = { ...settings.visibleColumns };
-      } else {
-        data.visibleColumns = { ...settings.visibleColumns, ...data.visibleColumns };
-      }
-      
-      setSettings(data);
-      setTempSettings(data);
     } catch (err) {
-      console.error(err);
-      showToast('Error loading settings', 'error');
+      console.warn('API settings not reachable, checking localStorage');
+    }
+
+    // Fallback to localStorage (works on Vercel, offline, or client-only)
+    try {
+      const saved = localStorage.getItem('hp_gas_settings');
+      if (saved) {
+        applyLoadedSettings(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.warn('Could not read localStorage settings');
     }
   };
 
-  // Fetch files in directory
+  // Fetch files in directory (graceful on Vercel/cloud)
   const fetchFiles = async () => {
     setLoading(true);
     try {
       const response = await fetch('/api/csv-files');
-      if (!response.ok) throw new Error('Failed to load CSV files');
-      const files = await response.json();
-      setCsvFiles(files);
-      if (files.length > 0) {
-        setSelectedFile(files[0].name);
-        fetchData(files[0].name);
-      } else {
-        setError(null);
-        setLoading(false);
+      if (response.ok) {
+        const files = await response.json();
+        if (Array.isArray(files) && files.length > 0) {
+          setCsvFiles(files);
+          setSelectedFile(files[0].name);
+          fetchData(files[0].name);
+          return;
+        }
       }
+      // If no files in folder or running on Vercel cloud
+      setCsvFiles([]);
+      setError(null);
     } catch (err) {
-      setError(err.message);
+      // In cloud mode (like Vercel), local folder scanning doesn't exist - this is normal
+      console.log('No local backend directory, cloud upload mode active');
+      setCsvFiles([]);
+      setError(null);
+    } finally {
       setLoading(false);
     }
   };
@@ -490,22 +510,30 @@ export default function App() {
   // Save Settings
   const handleSaveSettings = async () => {
     try {
-      const response = await fetch('/api/settings', {
+      localStorage.setItem('hp_gas_settings', JSON.stringify(tempSettings));
+    } catch (e) {}
+
+    try {
+      await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tempSettings)
       });
-      if (!response.ok) throw new Error('Failed to save settings');
-      setSettings(tempSettings);
-      setIsSettingsOpen(false);
-      showToast('Settings saved successfully');
     } catch (err) {
-      showToast('Error saving settings', 'error');
+      console.warn('Backend settings not reachable, saved to localStorage');
     }
+
+    setSettings(tempSettings);
+    setIsSettingsOpen(false);
+    showToast('Settings saved successfully');
   };
 
   // Save Settings Quietly (without showing toaster)
   const saveSettingsQuietly = async (updatedSettings) => {
+    try {
+      localStorage.setItem('hp_gas_settings', JSON.stringify(updatedSettings));
+    } catch (e) {}
+
     try {
       await fetch('/api/settings', {
         method: 'POST',
@@ -513,7 +541,7 @@ export default function App() {
         body: JSON.stringify(updatedSettings)
       });
     } catch (err) {
-      console.error('Error saving settings quietly:', err);
+      // quiet fallback
     }
   };
 
