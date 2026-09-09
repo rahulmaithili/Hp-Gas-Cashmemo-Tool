@@ -645,15 +645,37 @@ export default function App() {
     });
 
     const rowsToTranslate = Array.from(indicesToTranslate).map(idx => updatedData[idx]);
-    const batchSize = 15; // 15 records per batch for fast, reliable translation
     const totalRows = rowsToTranslate.length;
 
     // Map to collect translated values — avoids direct row mutation (React anti-pattern)
     const translationMap = new Map();
 
-    // ── Browser-side translation helper (for when server has no internet) ──
+    // Dynamic character-aware batching:
+    // Ensures total query length NEVER exceeds 350 characters (max 10 rows).
+    // This permanently prevents MyMemory 500-char limits and URL-length overflow for long addresses!
+    const batches = [];
+    let curBatch = [];
+    let curLen = 0;
+
+    rowsToTranslate.forEach(row => {
+      const text = String(row[backupKey] || row[translationColumn] || '').trim();
+      const itemLen = text.length + 6; // accounting for sequential prefix '12. ' and newline
+      if (curBatch.length > 0 && (curLen + itemLen > 350 || curBatch.length >= 10)) {
+        batches.push(curBatch);
+        curBatch = [row];
+        curLen = itemLen;
+      } else {
+        curBatch.push(row);
+        curLen += itemLen;
+      }
+    });
+    if (curBatch.length > 0) {
+      batches.push(curBatch);
+    }
+
+    // ── Browser-side translation helper (CORS-enabled direct fallback) ──
     const translateBatchBrowser = async (queryText, sl, tl) => {
-      // Browser Layer 1: MyMemory (CORS-enabled, 15 records easily fits under 500 chars limit)
+      // MyMemory (CORS-enabled, with <= 350 chars batch, it is always below 500 char limit)
       try {
         const url1 = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sl}|${tl}`;
         const r1 = await fetch(url1, { signal: AbortSignal.timeout(12000) });
@@ -668,34 +690,27 @@ export default function App() {
         console.warn('[translate-browser] MyMemory failed:', e1.message);
       }
 
-      // Browser Layer 2: Lingva fallback
-      try {
-        const url2 = `https://translate.plausibility.cloud/api/v1/${sl}/${tl}/${encodeURIComponent(queryText)}`;
-        const r2 = await fetch(url2, { signal: AbortSignal.timeout(12000) });
-        if (r2.ok) {
-          const d2 = await r2.json();
-          if (d2?.translation) return d2.translation;
-        }
-      } catch (e2) {
-        console.warn('[translate-browser] Lingva fallback failed:', e2.message);
-      }
-
-      throw new Error('All translation services unavailable. Please check your connection.');
+      throw new Error('Translation service temporarily unavailable. Please check your internet connection.');
     };
 
+    let processedCount = 0;
+
     try {
-      for (let i = 0; i < totalRows; i += batchSize) {
-        const batch = rowsToTranslate.slice(i, i + batchSize);
+      for (let b = 0; b < batches.length; b++) {
+        const batch = batches[b];
 
         // Prepend sequential number to prevent translation from merging rows
         const texts = batch.map((row, idx) => `${idx + 1}. ${row[backupKey] || row[translationColumn] || ' '}`);
         const queryText = texts.join('\n');
 
-        if (queryText.trim() === '') continue;
+        if (queryText.trim() === '') {
+          processedCount += batch.length;
+          continue;
+        }
 
         let translatedText = '';
 
-        // ── Primary: server-side proxy (Google Translate with fallback layers) ──
+        // ── Primary: server-side proxy (/api/translate - works on both Vercel and Render) ──
         try {
           const res = await fetch('/api/translate', {
             method: 'POST',
@@ -708,15 +723,14 @@ export default function App() {
               translatedText = result[0].map(item => item[0]).join('');
             }
           } else {
-            const errBody = await res.json().catch(() => ({}));
-            throw new Error(errBody.error || `Server ${res.status}`);
+            throw new Error(`Server returned ${res.status}`);
           }
         } catch (serverErr) {
-          console.warn('[translate] Server proxy failed:', serverErr.message, '— trying browser fallback...');
+          console.warn('[translate] Server proxy unavailable, trying browser fallback...');
           translatedText = await translateBatchBrowser(queryText, 'en', 'hi');
         }
 
-        const translatedLines = translatedText.split('\n');
+        const translatedLines = (translatedText || '').split('\n');
 
         batch.forEach((row, idx) => {
           const itemNum = idx + 1;
@@ -742,7 +756,8 @@ export default function App() {
           }
         });
 
-        setTranslationProgress(Math.min(100, Math.round(((i + batchSize) / totalRows) * 100)));
+        processedCount += batch.length;
+        setTranslationProgress(Math.min(100, Math.round((processedCount / totalRows) * 100)));
         await new Promise(resolve => setTimeout(resolve, 150));
       }
 
