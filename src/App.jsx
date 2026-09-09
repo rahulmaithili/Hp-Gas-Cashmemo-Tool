@@ -1604,6 +1604,22 @@ export default function App() {
             <h3>Processing Booking Records...</h3>
             <p>Scanning addresses, parsing fields, and loading layout details.</p>
           </div>
+        ) : data.length === 0 ? (
+          <div className="empty-state" style={{ gap: '1rem' }}>
+            <FileSpreadsheet size={48} style={{ color: 'var(--primary)', opacity: 0.8 }} />
+            <h3>No Booking Records Loaded</h3>
+            <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
+              The workspace folder does not contain any CSV files. Please upload your daily HP Gas refilling list below to get started.
+            </p>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => fileInputRef.current?.click()}
+              style={{ marginTop: '0.5rem', gap: '0.5rem' }}
+            >
+              <Upload size={18} />
+              <span>Select CSV File from Computer</span>
+            </button>
+          </div>
         ) : (
           <>
             {/* Stats row */}
@@ -2235,23 +2251,15 @@ export default function App() {
                   <tbody>
                     {paginatedData.length === 0 ? (
                       <tr>
-                        <td colSpan={25} style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-                            <FileSpreadsheet size={44} style={{ color: 'var(--primary)', opacity: 0.8 }} />
-                            <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                              कोई बुकिंग रिकॉर्ड लोड नहीं है (No Records Loaded)
+                        <td colSpan={25} style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-secondary)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                            <FileSpreadsheet size={36} style={{ color: 'var(--text-muted)', opacity: 0.7 }} />
+                            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              No matching records found
                             </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px' }}>
-                              कृपया ऊपर दिए गए <strong>"Upload Daily CSV"</strong> बटन से अपनी HP Gas दैनिक रिफिलिंग सूची अपलोड करें।
+                            <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                              Try clearing or adjusting your search and filter criteria.
                             </div>
-                            <button 
-                              className="btn btn-primary" 
-                              onClick={() => fileInputRef.current?.click()}
-                              style={{ marginTop: '0.5rem', gap: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem' }}
-                            >
-                              <Upload size={16} />
-                              <span>Select CSV File from Computer</span>
-                            </button>
                           </div>
                         </td>
                       </tr>
