@@ -61,7 +61,8 @@ export default function App() {
       total: true,
       signature: true
     },
-    rowsPerPrintPage: 15
+    rowsPerPrintPage: 15,
+    continuousPrintMode: true
   });
   
   // Temp settings for modal
@@ -303,6 +304,7 @@ export default function App() {
     if (!merged.columnFonts) merged.columnFonts = { ...settings.columnFonts };
     if (!merged.vendors) merged.vendors = [];
     if (!merged.rowsPerPrintPage) merged.rowsPerPrintPage = 15;
+    if (merged.continuousPrintMode === undefined) merged.continuousPrintMode = true;
     if (!merged.visibleColumns) {
       merged.visibleColumns = { ...settings.visibleColumns };
     } else {
@@ -2349,35 +2351,58 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Rows per page print settings */}
-              <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Rows per page in PDF (पीडीएफ में प्रति पेज लाइन संख्या):
-                </span>
-                <select
-                  className="input-control"
-                  style={{ width: '120px', padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                  value={settings.rowsPerPrintPage || 15}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10) || 15;
-                    const updatedSettings = {
-                      ...settings,
-                      rowsPerPrintPage: val
-                    };
-                    setSettings(updatedSettings);
-                    setTempSettings(updatedSettings);
-                    saveSettingsQuietly(updatedSettings);
-                  }}
-                >
-                  <option value={10}>10 lines</option>
-                  <option value={15}>15 lines</option>
-                  <option value={20}>20 lines</option>
-                  <option value={25}>25 lines</option>
-                  <option value={30}>30 lines</option>
-                  <option value={40}>40 lines</option>
-                  <option value={50}>50 lines</option>
-                  <option value={100}>100 lines</option>
-                </select>
+              {/* Rows per page & Continuous Print Mode settings */}
+              <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.25rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    Rows per page in PDF (प्रति पेज लाइन):
+                  </span>
+                  <select
+                    className="input-control"
+                    style={{ width: '120px', padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                    value={settings.rowsPerPrintPage || 15}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 15;
+                      const updatedSettings = {
+                        ...settings,
+                        rowsPerPrintPage: val
+                      };
+                      setSettings(updatedSettings);
+                      setTempSettings(updatedSettings);
+                      saveSettingsQuietly(updatedSettings);
+                    }}
+                  >
+                    <option value={10}>10 lines</option>
+                    <option value={15}>15 lines</option>
+                    <option value={20}>20 lines</option>
+                    <option value={25}>25 lines</option>
+                    <option value={30}>30 lines</option>
+                    <option value={40}>40 lines</option>
+                    <option value={50}>50 lines</option>
+                    <option value={100}>100 lines</option>
+                  </select>
+                </div>
+
+                {/* Continuous Flow vs New Page Per Area Toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--bg-tertiary)', padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={settings.continuousPrintMode !== false} 
+                      onChange={(e) => {
+                        const updated = {
+                          ...settings,
+                          continuousPrintMode: e.target.checked
+                        };
+                        setSettings(updated);
+                        setTempSettings(updated);
+                        saveSettingsQuietly(updated);
+                      }} 
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    <span>📄 Continuous Page Flow (Save Paper / अगला एरिया खाली जगह में आए)</span>
+                  </label>
+                </div>
               </div>
 
               {/* Actions panel */}
@@ -2627,10 +2652,13 @@ export default function App() {
       </main>
 
       {/* Hidden Printable Area for window.print() */}
-      {/* Hidden Printable Area for window.print() */}
       <div className="printable-area">
         {(() => {
-          // Pre-calculate chunks for all areas based on settings.rowsPerPrintPage
+          const pageSize = settings.rowsPerPrintPage || 15;
+          const isContinuous = settings.continuousPrintMode !== false;
+          const visibleColsCount = Object.entries(settings.visibleColumns || {}).filter(([key, val]) => val !== false).length;
+
+          // Group selected rows by AreaName
           const areaGroups = Object.entries(
             activeSelectedRows.reduce((acc, row) => {
               const area = row.AreaName || 'Unknown Area';
@@ -2640,8 +2668,139 @@ export default function App() {
             }, {})
           );
 
+          if (isContinuous) {
+            // CONTINUOUS FLOW: Pack items page-by-page (pageSize rows per printed page)
+            // If an area has 8 rows, the next area with 1 row starts right below it on the same page!
+            const pages = [];
+            let currentPageBlocks = [];
+            let currentRowsInPage = 0;
+
+            areaGroups.forEach(([areaName, areaRows]) => {
+              const areaTotalRows = areaRows.length;
+              const areaTotalCylinders = areaRows.reduce((acc, r) => acc + parseInt(r.OrderQuantity || 1, 10), 0);
+              let rowIndex = 0;
+
+              while (rowIndex < areaRows.length) {
+                // If page is full, push it and start fresh page
+                if (currentRowsInPage >= pageSize) {
+                  pages.push(currentPageBlocks);
+                  currentPageBlocks = [];
+                  currentRowsInPage = 0;
+                }
+
+                const spaceRemaining = pageSize - currentRowsInPage;
+                const rowsToTake = areaRows.slice(rowIndex, rowIndex + spaceRemaining);
+                const isFirstChunkOfArea = rowIndex === 0;
+
+                currentPageBlocks.push({
+                  areaName,
+                  chunkRows: rowsToTake,
+                  isFirstChunkOfArea,
+                  areaTotalRows,
+                  areaTotalCylinders,
+                  serialStart: rowIndex + 1
+                });
+
+                currentRowsInPage += rowsToTake.length;
+                rowIndex += rowsToTake.length;
+              }
+            });
+
+            if (currentPageBlocks.length > 0) {
+              pages.push(currentPageBlocks);
+            }
+
+            return pages.map((pageBlocks, pageIdx) => {
+              const isLastPage = pageIdx === pages.length - 1;
+
+              return (
+                <div
+                  key={`page-${pageIdx}`}
+                  className="print-area-section"
+                  style={{
+                    pageBreakAfter: isLastPage ? 'auto' : 'always',
+                    marginBottom: isLastPage ? '20px' : '0'
+                  }}
+                >
+                  {pageBlocks.map((block, blockIdx) => (
+                    <div key={`${block.areaName}-${pageIdx}-${blockIdx}`} style={{ marginBottom: blockIdx === pageBlocks.length - 1 ? '0' : '10px' }}>
+                      <table className="print-table" style={{ width: '100%', marginBottom: '0' }}>
+                        <thead>
+                          {/* Area Header Bar */}
+                          <tr>
+                            <th colSpan={visibleColsCount} style={{ padding: '5px 8px', backgroundColor: '#f2f2f2', borderBottom: '2px solid #000000', textAlign: 'left' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: '"Nirmala UI", "Segoe UI", Arial, sans-serif' }}>
+                                <div>
+                                  <span style={{ fontSize: '10.5pt', fontWeight: 'bold', color: '#000000' }}>{settings.agencyName}</span>
+                                  <span style={{ fontSize: '9pt', marginLeft: '1.25rem', color: '#000000', fontWeight: 'bold' }}>
+                                    Area: {block.areaName.toUpperCase()} {block.isFirstChunkOfArea ? '' : '(Continued)'}
+                                  </span>
+                                </div>
+                                <div style={{ textAlign: 'right', fontSize: '8pt', color: '#333333', fontWeight: 'normal' }}>
+                                  <strong>Total Booking:</strong> {block.areaTotalRows} | <strong>Cylinders:</strong> {block.areaTotalCylinders}
+                                </div>
+                              </div>
+                            </th>
+                          </tr>
+                          {/* Column Headers */}
+                          <tr>
+                            {settings.visibleColumns?.sn !== false && <th style={{ width: '4%' }}>Sn</th>}
+                            {settings.visibleColumns?.consumerNo !== false && <th style={{ width: '10%' }}>ConsumerNo</th>}
+                            {settings.visibleColumns?.consumerName !== false && <th style={{ width: '18%' }}>ConsumerName</th>}
+                            {settings.visibleColumns?.orderDate !== false && <th style={{ width: '10%' }}>OrderDate</th>}
+                            {settings.visibleColumns?.areaName !== false && <th style={{ width: '12%' }}>AreaName</th>}
+                            {settings.visibleColumns?.deliveryMan !== false && <th style={{ width: '15%' }}>DeliveryMan</th>}
+                            {settings.visibleColumns?.online !== false && <th style={{ width: '8%' }}>Online</th>}
+                            {settings.visibleColumns?.ivrsNo !== false && <th style={{ width: '11%' }}>IVRSBookingNo</th>}
+                            {settings.visibleColumns?.mobileNo !== false && <th style={{ width: '11%' }}>MobileNo</th>}
+                            {settings.visibleColumns?.address !== false && <th style={{ width: '38%' }}>ConsumerAddress</th>}
+                            {settings.visibleColumns?.ekyc !== false && <th style={{ width: '10%' }}>EkycStatus</th>}
+                            {settings.visibleColumns?.rate !== false && <th style={{ width: '8%' }}>Rate</th>}
+                            {settings.visibleColumns?.total !== false && <th style={{ width: '8%' }}>Total</th>}
+                            {settings.visibleColumns?.signature !== false && <th style={{ width: '20%' }}>Remarks / Signature</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {block.chunkRows.map((row, idx) => {
+                            const dateOnly = row.OrderDate ? row.OrderDate.split(' ')[0] : '';
+                            const rate = getRate(row.Packagecode_Desc);
+                            const qty = parseInt(row.OrderQuantity || 1, 10);
+                            const total = rate * qty;
+
+                            return (
+                              <tr key={idx}>
+                                {settings.visibleColumns?.sn !== false && <td className="text-center" style={{ fontSize: `${getColFontSize('sn', 9)}pt` }}>{block.serialStart + idx}</td>}
+                                {settings.visibleColumns?.consumerNo !== false && <td style={{ fontSize: `${getColFontSize('consumer_no', 9)}pt` }}>{row.ConsumerNo}</td>}
+                                {settings.visibleColumns?.consumerName !== false && <td className="font-bold" style={{ fontSize: `${getColFontSize('name', 9.5)}pt` }}>{row.ConsumerName}</td>}
+                                {settings.visibleColumns?.orderDate !== false && <td style={{ fontSize: `${getColFontSize('order_date', 9)}pt` }}>{dateOnly}</td>}
+                                {settings.visibleColumns?.areaName !== false && <td style={{ fontSize: `${getColFontSize('area_name', 8)}pt` }}>{row.AreaName}</td>}
+                                {settings.visibleColumns?.deliveryMan !== false && <td style={{ fontSize: '8.5pt' }}>{row.DeliveryMan}</td>}
+                                {settings.visibleColumns?.online !== false && (
+                                  <td className="text-center font-bold" style={{ fontSize: `${getColFontSize('online', 9)}pt` }}>
+                                    {row.RefillPaymentStatus === 'PAID' ? 'PAID' : ''}
+                                  </td>
+                                )}
+                                {settings.visibleColumns?.ivrsNo !== false && <td style={{ fontSize: `${getColFontSize('ivrs_no', 9)}pt` }}>{row.IVRSBookingNumber}</td>}
+                                {settings.visibleColumns?.mobileNo !== false && <td style={{ fontSize: `${getColFontSize('mobile_no', 9)}pt` }}>{row.MobileNo}</td>}
+                                {settings.visibleColumns?.address !== false && <td className="address-cell" style={{ fontSize: `${getColFontSize('address', 7.5)}pt` }}>{row.ConsumerAddress}</td>}
+                                {settings.visibleColumns?.ekyc !== false && <td className="font-bold" style={{ fontSize: `${getColFontSize('ekyc', 9)}pt` }}>{row.EkycStatus}</td>}
+                                {settings.visibleColumns?.rate !== false && <td className="text-right" style={{ fontSize: `${getColFontSize('rate', 9)}pt` }}>₹{rate}</td>}
+                                {settings.visibleColumns?.total !== false && <td className="text-right font-bold" style={{ fontSize: `${getColFontSize('total', 9)}pt` }}>₹{total}</td>}
+                                {settings.visibleColumns?.signature !== false && <td></td>}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              );
+            });
+          }
+
+          // SEPARATE PAGE PER AREA (Classic mode when continuousPrintMode is false)
           const printChunks = areaGroups.flatMap(([areaName, areaRows]) => {
-            const pageSize = settings.rowsPerPrintPage || 15;
             const chunks = [];
             for (let i = 0; i < areaRows.length; i += pageSize) {
               chunks.push(areaRows.slice(i, i + pageSize));
@@ -2657,10 +2816,9 @@ export default function App() {
           });
 
           return printChunks.map(({ areaName, chunkRows, chunkIdx, totalChunks, areaTotalRows, areaTotalCylinders }, globalIdx) => {
-            const visibleColsCount = Object.entries(settings.visibleColumns || {}).filter(([key, val]) => val !== false).length;
             const pageLabel = totalChunks > 1 ? ` (Page ${chunkIdx + 1}/${totalChunks})` : '';
             const isLastGlobal = globalIdx === printChunks.length - 1;
-            const serialStart = chunkIdx * (settings.rowsPerPrintPage || 15) + 1;
+            const serialStart = chunkIdx * pageSize + 1;
 
             return (
               <div 
@@ -2673,7 +2831,6 @@ export default function App() {
               >
                 <table className="print-table" style={{ width: '100%', marginBottom: '20px' }}>
                   <thead>
-                    {/* Repeating title/metadata row that prints at the top of every page */}
                     <tr>
                       <th colSpan={visibleColsCount} style={{ padding: '6px 8px', backgroundColor: '#f2f2f2', borderBottom: '2px solid #000000', textAlign: 'left' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: '"Nirmala UI", "Segoe UI", Arial, sans-serif' }}>
@@ -2689,7 +2846,6 @@ export default function App() {
                         </div>
                       </th>
                     </tr>
-                    {/* Column labels row */}
                     <tr>
                       {settings.visibleColumns?.sn !== false && <th style={{ width: '4%' }}>Sn</th>}
                       {settings.visibleColumns?.consumerNo !== false && <th style={{ width: '10%' }}>ConsumerNo</th>}
@@ -2781,6 +2937,20 @@ export default function App() {
                   />
                 </div>
 
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={tempSettings.continuousPrintMode !== false}
+                      onChange={(e) => setTempSettings({ ...tempSettings, continuousPrintMode: e.target.checked })}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <span>Continuous Page Flow (Save Paper — जब एरिया छोटा हो तो अगला एरिया उसी पेज पर आए)</span>
+                  </label>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '1.5rem' }}>
+                    इसको ऑन रखने से खाली जगह बर्बाद नहीं होगी और छोटा एरिया अगले पेज पर जाने के बजाय खाली जगह में ही आ जाएगा।
+                  </span>
+                </div>
               </div>
 
               {/* Dynamic Font Sizes Editor */}
