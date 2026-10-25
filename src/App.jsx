@@ -160,7 +160,7 @@ export default function App() {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  // Verify license key with Google Apps Script API endpoint
+  // Verify license key with Supabase LicenseWala API endpoint
   const verifyLicenseKey = async (rawKey, isSilent = false) => {
     const key = (rawKey || '').trim().toUpperCase();
     if (!key) {
@@ -175,9 +175,26 @@ export default function App() {
 
     try {
       const deviceId = getDeviceId();
-      const apiUrl = `https://script.google.com/macros/s/AKfycbyniiGJoVV3_P2KKifUfw-8U8E-1EnYGEKpc3wByfdsmKKDKkedI87UR5nS4SUln3aE/exec?action=verify_license&licenseKey=${encodeURIComponent(key)}&t=${Date.now()}`;
-      
-      const response = await fetch(apiUrl, { redirect: 'follow' });
+      const supabaseUrl = 'https://wyeejbncddpxhwtijkjt.supabase.co/rest/v1/rpc/verify_license';
+      const supabaseAnonKey = 'sb_publishable_VfUVN_NPMbe9OudO5ZonPw_kMKaub_u';
+
+      const response = await fetch(supabaseUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          p_license_key: key,
+          p_device_id: deviceId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.status === 'active') {
@@ -3171,7 +3188,7 @@ export default function App() {
                     <input
                       type="text"
                       className="input-control"
-                      placeholder="e.g. CDCMS-PR99-U61Z-GOFN-OBSG"
+                      placeholder="e.g. LW-PHLP-BESE-KG3D-DJ4G"
                       value={licenseKeyInput}
                       onChange={(e) => {
                         setLicenseKeyInput(e.target.value.toUpperCase());
@@ -3228,7 +3245,7 @@ export default function App() {
                       className="license-portal-btn"
                       style={{ width: '100%' }}
                     >
-                      <span>Get License on LicenseVault Portal</span>
+                      <span>Get License on LicenseWala Portal</span>
                       <ExternalLink size={16} />
                     </a>
                   </div>
@@ -3238,7 +3255,7 @@ export default function App() {
 
             <div className="modal-footer" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Powered by LicenseVault Security
+                Powered by LicenseWala Security
               </span>
               {licenseInfo && isLicenseActive(licenseInfo) ? (
                 <button className="btn btn-secondary" onClick={() => setIsLicenseModalOpen(false)}>
