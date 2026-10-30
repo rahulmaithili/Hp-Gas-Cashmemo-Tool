@@ -93,7 +93,7 @@ export default function App() {
   const [selectedRows, setSelectedRows] = useState(new Set());
   
   // Hindi translation state
-  const [translationColumn, setTranslationColumn] = useState('ConsumerName');
+  const [translationColumn, setTranslationColumn] = useState('BOTH_NAME_ADDRESS');
   const [hasTranslatedColumn, setHasTranslatedColumn] = useState({});
 
   // Formatting options
@@ -778,14 +778,10 @@ export default function App() {
     showToast('Synced rate items with current data');
   };
 
-  // Hindi translation logic
+  // Hindi translation logic (supports single column or Name + Address both)
   const handleTranslateColumn = async () => {
     if (data.length === 0) return;
 
-    // Determine target rows to translate:
-    // ALWAYS respect current area / search filter & selection!
-    // If specific rows in current filtered view are checked, translate those (activeSelectedRows).
-    // If none checked in filter, translate all rows in current filteredData.
     const targetRows = activeSelectedRows.length > 0 
       ? activeSelectedRows 
       : (filteredData.length > 0 ? filteredData : data);
@@ -803,56 +799,34 @@ export default function App() {
       return;
     }
 
+    const columnsToTranslate = translationColumn === 'BOTH_NAME_ADDRESS'
+      ? ['ConsumerName', 'ConsumerAddress']
+      : [translationColumn];
+
     setTranslationLoading(true);
     setTranslationProgress(0);
-    showToast(`Translating ${translationColumn} column to Hindi for ${indicesToTranslate.size} record(s)...`, 'info');
+    showToast(`Translating ${columnsToTranslate.join(' & ')} to Hindi for ${indicesToTranslate.size} record(s)...`, 'info');
 
-    const backupKey = `original_${translationColumn}`;
-    
-    // Create copies of rows being modified to respect React state immutability
-    const updatedData = data.map((row, idx) => {
+    // Create copies and backups
+    let workingData = data.map((row, idx) => {
       if (indicesToTranslate.has(idx)) {
         const updatedRow = { ...row };
-        if (updatedRow[backupKey] === undefined) {
-          updatedRow[backupKey] = row[translationColumn] || '';
-        }
+        columnsToTranslate.forEach(col => {
+          const backupKey = `original_${col}`;
+          if (updatedRow[backupKey] === undefined) {
+            updatedRow[backupKey] = row[col] || '';
+          }
+        });
         return updatedRow;
       }
       return row;
     });
 
-    const rowsToTranslate = Array.from(indicesToTranslate).map(idx => updatedData[idx]);
-    const totalRows = rowsToTranslate.length;
+    const rowsToTranslate = Array.from(indicesToTranslate).map(idx => workingData[idx]);
+    const totalSteps = columnsToTranslate.length * rowsToTranslate.length;
+    let completedSteps = 0;
 
-    // Map to collect translated values — avoids direct row mutation (React anti-pattern)
-    const translationMap = new Map();
-
-    // Dynamic character-aware batching:
-    // Ensures total query length NEVER exceeds 350 characters (max 10 rows).
-    // This permanently prevents MyMemory 500-char limits and URL-length overflow for long addresses!
-    const batches = [];
-    let curBatch = [];
-    let curLen = 0;
-
-    rowsToTranslate.forEach(row => {
-      const text = String(row[backupKey] || row[translationColumn] || '').trim();
-      const itemLen = text.length + 6; // accounting for sequential prefix '12. ' and newline
-      if (curBatch.length > 0 && (curLen + itemLen > 350 || curBatch.length >= 10)) {
-        batches.push(curBatch);
-        curBatch = [row];
-        curLen = itemLen;
-      } else {
-        curBatch.push(row);
-        curLen += itemLen;
-      }
-    });
-    if (curBatch.length > 0) {
-      batches.push(curBatch);
-    }
-
-    // ── Browser-side translation helper (CORS-enabled direct fallback) ──
     const translateBatchBrowser = async (queryText, sl, tl) => {
-      // MyMemory (CORS-enabled, with <= 350 chars batch, it is always below 500 char limit)
       try {
         const url1 = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sl}|${tl}`;
         const r1 = await fetch(url1, { signal: AbortSignal.timeout(12000) });
@@ -866,92 +840,107 @@ export default function App() {
       } catch (e1) {
         console.warn('[translate-browser] MyMemory failed:', e1.message);
       }
-
       throw new Error('Translation service temporarily unavailable. Please check your internet connection.');
     };
 
-    let processedCount = 0;
-
     try {
-      for (let b = 0; b < batches.length; b++) {
-        const batch = batches[b];
+      for (const col of columnsToTranslate) {
+        const backupKey = `original_${col}`;
+        const translationMap = new Map();
 
-        // Prepend sequential number to prevent translation from merging rows
-        const texts = batch.map((row, idx) => `${idx + 1}. ${row[backupKey] || row[translationColumn] || ' '}`);
-        const queryText = texts.join('\n');
+        // Batch rows (max 350 chars or 10 rows per batch)
+        const batches = [];
+        let curBatch = [];
+        let curLen = 0;
 
-        if (queryText.trim() === '') {
-          processedCount += batch.length;
-          continue;
-        }
-
-        let translatedText = '';
-
-        // ── Primary: server-side proxy (/api/translate - works on both Vercel and Render) ──
-        try {
-          const res = await fetch('/api/translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: queryText, sl: 'en', tl: 'hi' })
-          });
-          if (res.ok) {
-            const result = await res.json();
-            if (result && result[0]) {
-              translatedText = result[0].map(item => item[0]).join('');
-            }
+        rowsToTranslate.forEach(row => {
+          const text = String(row[backupKey] || row[col] || '').trim();
+          const itemLen = text.length + 6;
+          if (curBatch.length > 0 && (curLen + itemLen > 350 || curBatch.length >= 10)) {
+            batches.push(curBatch);
+            curBatch = [row];
+            curLen = itemLen;
           } else {
-            throw new Error(`Server returned ${res.status}`);
-          }
-        } catch (serverErr) {
-          console.warn('[translate] Server proxy unavailable, trying browser fallback...');
-          translatedText = await translateBatchBrowser(queryText, 'en', 'hi');
-        }
-
-        const translatedLines = (translatedText || '').split('\n');
-
-        batch.forEach((row, idx) => {
-          const itemNum = idx + 1;
-          const engPrefix = `${itemNum}`;
-          const hDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
-          const hindiPrefix = `${itemNum}`.split('').map(c => hDigits[parseInt(c, 10)] || c).join('');
-
-          const matchingLine = translatedLines.find(line => {
-            const trimmed = line.trim();
-            return trimmed.startsWith(`${engPrefix}.`) || 
-                   trimmed.startsWith(`${engPrefix} `) || 
-                   trimmed.startsWith(`${hindiPrefix}.`) || 
-                   trimmed.startsWith(`${hindiPrefix} `);
-          });
-
-          if (matchingLine) {
-            translationMap.set(row, matchingLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
-          } else {
-            const fallbackLine = translatedLines[idx];
-            if (fallbackLine) {
-              translationMap.set(row, fallbackLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
-            }
+            curBatch.push(row);
+            curLen += itemLen;
           }
         });
+        if (curBatch.length > 0) batches.push(curBatch);
 
-        processedCount += batch.length;
-        setTranslationProgress(Math.min(100, Math.round((processedCount / totalRows) * 100)));
-        await new Promise(resolve => setTimeout(resolve, 150));
+        for (let b = 0; b < batches.length; b++) {
+          const batch = batches[b];
+          const texts = batch.map((row, idx) => `${idx + 1}. ${row[backupKey] || row[col] || ' '}`);
+          const queryText = texts.join('\n');
+
+          if (queryText.trim() === '') {
+            completedSteps += batch.length;
+            continue;
+          }
+
+          let translatedText = '';
+          try {
+            const res = await fetch('/api/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: queryText, sl: 'en', tl: 'hi' })
+            });
+            if (res.ok) {
+              const result = await res.json();
+              if (result && result[0]) {
+                translatedText = result[0].map(item => item[0]).join('');
+              }
+            } else {
+              throw new Error(`Server returned ${res.status}`);
+            }
+          } catch (serverErr) {
+            translatedText = await translateBatchBrowser(queryText, 'en', 'hi');
+          }
+
+          const translatedLines = (translatedText || '').split('\n');
+
+          batch.forEach((row, idx) => {
+            const itemNum = idx + 1;
+            const engPrefix = `${itemNum}`;
+            const hDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+            const hindiPrefix = `${itemNum}`.split('').map(c => hDigits[parseInt(c, 10)] || c).join('');
+
+            const matchingLine = translatedLines.find(line => {
+              const trimmed = line.trim();
+              return trimmed.startsWith(`${engPrefix}.`) || 
+                     trimmed.startsWith(`${engPrefix} `) || 
+                     trimmed.startsWith(`${hindiPrefix}.`) || 
+                     trimmed.startsWith(`${hindiPrefix} `);
+            });
+
+            if (matchingLine) {
+              translationMap.set(row, matchingLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
+            } else {
+              const fallbackLine = translatedLines[idx];
+              if (fallbackLine) {
+                translationMap.set(row, fallbackLine.replace(/^[0-9०-९]+[\s\.\:\)\]]+/, '').trim());
+              }
+            }
+          });
+
+          completedSteps += batch.length;
+          setTranslationProgress(Math.min(100, Math.round((completedSteps / totalSteps) * 100)));
+          await new Promise(resolve => setTimeout(resolve, 120));
+        }
+
+        // Apply translations for this column
+        workingData = workingData.map(row => {
+          if (translationMap.has(row)) {
+            return { ...row, [col]: translationMap.get(row) };
+          }
+          return row;
+        });
       }
 
-      // Build final immutable state from translation map
-      const finalData = updatedData.map(row => {
-        if (translationMap.has(row)) {
-          return { ...row, [translationColumn]: translationMap.get(row) };
-        }
-        return row;
-      });
-
-      setData(finalData);
-      setHasTranslatedColumn({
-        ...hasTranslatedColumn,
-        [translationColumn]: true
-      });
-      showToast(`${translationColumn} column translated to Hindi successfully for ${totalRows} records!`, 'success');
+      setData(workingData);
+      const newStatus = { ...hasTranslatedColumn, [translationColumn]: true };
+      columnsToTranslate.forEach(c => { newStatus[c] = true; });
+      setHasTranslatedColumn(newStatus);
+      showToast(`${columnsToTranslate.join(' & ')} translated to Hindi successfully!`, 'success');
     } catch (err) {
       console.error('[translate] Error:', err);
       showToast(`Translation failed: ${err.message}`, 'error');
@@ -962,23 +951,26 @@ export default function App() {
   };
 
   const handleRevertTranslation = () => {
-    const backupKey = `original_${translationColumn}`;
+    const columnsToRevert = translationColumn === 'BOTH_NAME_ADDRESS'
+      ? ['ConsumerName', 'ConsumerAddress']
+      : [translationColumn];
+
     const updatedData = data.map(row => {
-      if (row[backupKey] !== undefined) {
-        return {
-          ...row,
-          [translationColumn]: row[backupKey]
-        };
-      }
-      return row;
+      const restored = { ...row };
+      columnsToRevert.forEach(col => {
+        const backupKey = `original_${col}`;
+        if (restored[backupKey] !== undefined) {
+          restored[col] = restored[backupKey];
+        }
+      });
+      return restored;
     });
 
     setData(updatedData);
-    setHasTranslatedColumn({
-      ...hasTranslatedColumn,
-      [translationColumn]: false
-    });
-    showToast(`Restored original English text for ${translationColumn}`);
+    const newStatus = { ...hasTranslatedColumn, [translationColumn]: false };
+    columnsToRevert.forEach(c => { newStatus[c] = false; });
+    setHasTranslatedColumn(newStatus);
+    showToast(`Restored original text for ${columnsToRevert.join(' & ')}.`, 'info');
   };
 
   // Reset all dashboard search and filter criteria
@@ -2285,14 +2277,15 @@ export default function App() {
                   </div>
                   <select 
                     className="input-control" 
-                    style={{ width: '160px', padding: '0.25rem 0.5rem', fontSize: '0.85rem', height: '32px' }} 
+                    style={{ width: '190px', padding: '0.25rem 0.5rem', fontSize: '0.85rem', height: '32px', fontWeight: 600 }} 
                     value={translationColumn}
                     onChange={(e) => setTranslationColumn(e.target.value)}
                   >
+                    <option value="BOTH_NAME_ADDRESS">Name + Address (दोनों)</option>
                     <option value="ConsumerAddress">Address (पता)</option>
                     <option value="ConsumerName">Name (नाम)</option>
                     <option value="AreaName">Area (गाँव/क्षेत्र)</option>
-                    <option value="EkycStatus">eKYC (स्थिति)</option>
+                    <option value="EkycStatus">eKYC Status (स्थिति)</option>
                   </select>
                   <button 
                     className="btn btn-primary" 
