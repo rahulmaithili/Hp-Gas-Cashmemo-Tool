@@ -1,118 +1,139 @@
-# 🔥 HP Gas Delivery & Pending Vendor Cashmemo Tool
+# HP Gas Delivery Memo Pro
 
-[![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![Live App](https://img.shields.io/badge/🚀_Live_Demo-Open_Application-success?style=for-the-badge&logo=render)](https://hp-gas-cashmemo-tool.onrender.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+> Pending vendor cashmemo management for HP Gas distributorships —
+> process cashmemos, build delivery run-sheets, print, and export,
+> all behind a LicenseWala license.
 
-🌐 **Live Web Application**: [https://hp-gas-cashmemo-tool.onrender.com/](https://hp-gas-cashmemo-tool.onrender.com/)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Stack](https://img.shields.io/badge/stack-React%20%2B%20Vite%20%2B%20Express-green)
+![License](https://img.shields.io/badge/license-LicenseWala%20Subscription-purple)
 
-A powerful, high-efficiency desktop and web application specifically crafted for **HP Gas Distributorships & Agencies**. This tool automates the management of pending vendor cashmemos, delivery boy tracking, eKYC status monitoring, rate calculation, dynamic print page generation, and Excel exports.
-
-
----
-
-## ✨ Key Features
-
-- 📑 **Automated CSV Parsing & Normalization**: Automatically scans local folder for HP Gas CSV reports and intelligently normalizes varied column names into a unified standard schema.
-- 🚚 **Delivery Boy & Vendor Management**: Filter and group pending cashmemos by area name or specific delivery boys/vendors.
-- 💰 **Dynamic Rate & Package Calculation**: Automatically calculates cylinder rates and total billings based on cylinder package types (e.g., 14.2 KG Non-Subsidized, Ujjwala, 19 KG Commercial, 5 KG).
-- 🖨️ **Customizable Print Sheets**: Generate print-ready delivery lists customized by font size, visible columns, and exact rows per page to match physical distribution sheets.
-- 📱 **WhatsApp Integration**: Fast, direct messaging access to delivery vendors via WhatsApp Web or App.
-- 📊 **Excel & Data Export**: Export filtered reports into cleanly styled Excel sheets utilizing `exceljs`.
-- 📦 **Offline Package Deployment**: Bundled with PowerShell scripts (`Create_Offline_Package.ps1`) for seamless standalone offline deployment without technical overhead.
+🌐 **Live application**: [https://hp-gas-cashmemo-tool.vercel.app/](https://hp-gas-cashmemo-tool.vercel.app/)
 
 ---
 
-## 🛠️ Tech Stack
+## What it does
 
-- **Frontend**: React 18, Vite, Lucide React Icons, Vanilla CSS Design System
+Every day, an HP Gas agency handles piles of pending vendor cashmemos:
+which delivery boy took which cylinders, to which areas, at what rate.
+**HP Gas Delivery Memo Pro** turns that pile into clean, printable
+delivery sheets:
+
+- **CSV processing** — reads HP Gas CSV reports and normalizes varied
+  column names into one standard schema automatically.
+- **Area & delivery-boy grouping** — filter and group pending cashmemos
+  by area name or by specific delivery boys/vendors.
+- **Rates & packages** — calculates cylinder rates and totals by
+  package type (14.2 KG Non-Subsidized, Ujjwala, 19 KG Commercial,
+  5 KG, and more), configurable from the UI.
+- **Print-ready run-sheets** — generate delivery lists customized by
+  font size, visible columns, and rows per page. Continuous page flow
+  means no blank half-pages wasted across areas.
+- **1-click translation** — translate Consumer Address and Name +
+  Address fields in one click.
+- **Excel export** — export filtered reports into cleanly styled Excel
+  sheets.
+- **WhatsApp access** — reach delivery vendors fast via WhatsApp Web
+  or the app.
+- **License protected** — print, export, and cashmemo processing stay
+  locked until a valid LicenseWala license key is activated.
+
+## License activation
+
+A valid **LicenseWala subscription license** is required. Keys are
+issued from the LicenseWala portal
+([licensescript.netlify.app](https://licensescript.netlify.app/)).
+
+- Open the app — if no active license is found, an activation screen
+  appears. Enter your LicenseWala key and activate.
+- The key is verified online against the LicenseWala server, together
+  with a per-browser device identifier (one device per license).
+- The license is re-verified silently every 30 minutes while the app
+  is open. If the license expires, is revoked, or is blocked by the
+  administrator, the app locks immediately and shows a renewal prompt.
+- Network problems do not lock you out instantly: a short grace period
+  (max 24 hours from the last successful verification) covers temporary
+  outages.
+
+## Tech stack
+
+- **Frontend**: React 18, Vite, Lucide React Icons, Vanilla CSS design
+  system
 - **Backend / API**: Node.js, Express.js
-- **Data Processing**: PapaParse (CSV Parsing), ExcelJS (Excel Generation)
-- **Tooling & Bundling**: Concurrently, PowerShell Packaging Scripts
+- **Data processing**: PapaParse (CSV parsing), ExcelJS (Excel export)
+- **Tooling**: Concurrently, PowerShell packaging scripts
 
----
-
-## 📁 Project Structure
+## Project structure
 
 ```text
-├── src/                      # React Frontend Source Files
-│   ├── App.jsx               # Main UI Application Component
-│   ├── main.jsx              # Application Entry Point
-│   └── index.css             # Design System & Styling
-├── server.js                 # Express Backend API Server & CSV Processor
-├── package.json              # Project Dependencies & NPM Scripts
-├── settings.json             # App Configuration (Rates, Fonts, Vendors)
-├── Launch_Tool.bat           # One-click Launcher Batch Script
-└── Create_Offline_Package.ps1 # Standalone Offline Deployment Builder
+├── src/                      # React frontend
+│   ├── App.jsx               # Main application (cashmemo processing, print, license gate)
+│   ├── main.jsx              # Application entry point
+│   └── index.css             # Design system & styling
+├── api/                      # Serverless API routes
+├── server.js                 # Express backend API server & CSV processor
+├── package.json              # Dependencies & NPM scripts
+├── Launch_Tool.bat           # One-click launcher (Windows)
+└── Create_Offline_Package.ps1 # Standalone offline deployment builder
 ```
 
----
-
-## 🚀 Getting Started
+## Getting started
 
 ### Prerequisites
 
-Make sure you have [Node.js](https://nodejs.org/) (v16 or higher) installed on your system.
+[Node.js](https://nodejs.org/) (v16 or higher).
 
 ### Installation
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/rahulmaithili/Hp-Gas-Cashmemo-Tool.git
-   cd Hp-Gas-Cashmemo-Tool
-   ```
+```bash
+git clone https://github.com/rahulmaithili/Hp-Gas-Cashmemo-Tool.git
+cd Hp-Gas-Cashmemo-Tool
+npm install
+```
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
----
-
-## 💻 Running the Application
-
-### Development / Full Mode
-To run both the backend API server and the Vite frontend simultaneously:
+### Run
 
 ```bash
 npm run dev
 ```
 
-The application will start and open locally (typically at `http://localhost:5173`).
+This runs the backend API server and the Vite frontend together; the
+app typically opens at `http://localhost:5173`.
 
-### Launch via One-Click Script (Windows)
-Double-click on `Launch_Tool.bat` to launch the server and frontend automatically.
+### One-click launch (Windows)
+
+Double-click `Launch_Tool.bat` to start the server and frontend
+automatically.
+
+## Configuration
+
+Rates, agency details, and display settings (columns, fonts, rows per
+print page) are configurable directly from the application UI.
+
+## Privacy
+
+- Your cashmemo data is processed in your browser / your own deployment.
+- No data is sold, no advertisers, no third-party tracking.
+- Only the license key and an anonymous device identifier are sent to
+  the LicenseWala server, solely for license verification.
+
+## Recent updates
+
+- License hardening: offline fallback bounded to 24 hours from the last
+  successful verification, with silent re-verification every 30 minutes
+  while the app is open.
+- Continuous page flow printing, eliminating blank half-page waste
+  across areas.
+- 1-click translation for Consumer Address and Name + Address.
+- Filter panel redesign with a clean modern pattern.
+
+## Support
+
+- License keys and subscriptions: [LicenseWala portal](https://licensescript.netlify.app/)
+- WhatsApp: [+91 75649 48617](https://wa.me/917564948617)
+- Email: [life.rahulg@gmail.com](mailto:life.rahulg@gmail.com)
+- Issues: [GitHub Issues](https://github.com/rahulmaithili/Hp-Gas-Cashmemo-Tool/issues)
 
 ---
 
-## ⚙️ Configuration (`settings.json`)
-
-You can customize rates, agency names, and column display settings directly from the application UI or by modifying `settings.json`:
-
-```json
-{
-  "agencyName": "M/S RAHUL HP GAS SERVICE",
-  "rates": {
-    "14.2 KG NON-SUBSIDIZED CYLINDER-LD(DBTL CTC)": 950,
-    "16-Scheme Ujjwala": 650,
-    "19.0 KG NON-SUBSIDIZED CYLINDER": 1850,
-    "5.0 KG NON-SUBSIDIZED CYLINDER": 380
-  },
-  "defaultRate": 950,
-  "rowsPerPrintPage": 15
-}
-```
-
----
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome! Feel free to check the [Issues](https://github.com/rahulmaithili/Hp-Gas-Cashmemo-Tool/issues) page.
-
----
-
-## 📝 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
+Built for LPG distributors running HP Gas agencies.
