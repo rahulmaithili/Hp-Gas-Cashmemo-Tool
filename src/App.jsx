@@ -1371,7 +1371,8 @@ export default function App() {
         scrollX: 0,
         scrollY: 0
       },
-      jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
     
     if (window.html2pdf) {
@@ -2823,75 +2824,32 @@ export default function App() {
           );
 
           if (isContinuous) {
-            // CONTINUOUS FLOW: Pack items page-by-page (pageSize rows per printed page)
-            // If an area has 8 rows, the next area with 1 row starts right below it on the same page!
-            const pages = [];
-            let currentPageBlocks = [];
-            let currentRowsInPage = 0;
+            // TRUE CONTINUOUS FLOW: All areas flow seamlessly one after another!
+            // When an area ends, the next area begins immediately below it in the remaining space.
+            // Page breaks happen ONLY when an A4 sheet is physically full.
+            // Absolutely NO artificial page breaks or wasted blank paper!
+            return (
+              <div className="print-area-continuous">
+                {areaGroups.map(([areaName, areaRows], areaIdx) => {
+                  const areaTotalRows = areaRows.length;
+                  const areaTotalCylinders = areaRows.reduce((acc, r) => acc + parseInt(r.OrderQuantity || 1, 10), 0);
 
-            areaGroups.forEach(([areaName, areaRows]) => {
-              const areaTotalRows = areaRows.length;
-              const areaTotalCylinders = areaRows.reduce((acc, r) => acc + parseInt(r.OrderQuantity || 1, 10), 0);
-              let rowIndex = 0;
-
-              while (rowIndex < areaRows.length) {
-                // If page is full, push it and start fresh page
-                if (currentRowsInPage >= pageSize) {
-                  pages.push(currentPageBlocks);
-                  currentPageBlocks = [];
-                  currentRowsInPage = 0;
-                }
-
-                const spaceRemaining = pageSize - currentRowsInPage;
-                const rowsToTake = areaRows.slice(rowIndex, rowIndex + spaceRemaining);
-                const isFirstChunkOfArea = rowIndex === 0;
-
-                currentPageBlocks.push({
-                  areaName,
-                  chunkRows: rowsToTake,
-                  isFirstChunkOfArea,
-                  areaTotalRows,
-                  areaTotalCylinders,
-                  serialStart: rowIndex + 1
-                });
-
-                currentRowsInPage += rowsToTake.length;
-                rowIndex += rowsToTake.length;
-              }
-            });
-
-            if (currentPageBlocks.length > 0) {
-              pages.push(currentPageBlocks);
-            }
-
-            return pages.map((pageBlocks, pageIdx) => {
-              const isLastPage = pageIdx === pages.length - 1;
-
-              return (
-                <div
-                  key={`page-${pageIdx}`}
-                  className="print-area-section"
-                  style={{
-                    pageBreakAfter: isLastPage ? 'auto' : 'always',
-                    marginBottom: isLastPage ? '20px' : '0'
-                  }}
-                >
-                  {pageBlocks.map((block, blockIdx) => (
-                    <div key={`${block.areaName}-${pageIdx}-${blockIdx}`} style={{ marginBottom: blockIdx === pageBlocks.length - 1 ? '0' : '10px' }}>
+                  return (
+                    <div key={`${areaName}-${areaIdx}`} className="print-area-block" style={{ marginBottom: areaIdx === areaGroups.length - 1 ? '0' : '8px' }}>
                       <table className="print-table" style={{ width: '100%', marginBottom: '0' }}>
                         <thead>
                           {/* Area Header Bar */}
                           <tr>
-                            <th colSpan={visibleColsCount} style={{ padding: '5px 8px', backgroundColor: '#f2f2f2', borderBottom: '2px solid #000000', textAlign: 'left' }}>
+                            <th colSpan={visibleColsCount} style={{ padding: '4px 8px', backgroundColor: '#f2f2f2', borderBottom: '2px solid #000000', textAlign: 'left' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: '"Nirmala UI", "Segoe UI", Arial, sans-serif' }}>
                                 <div>
-                                  <span style={{ fontSize: '10.5pt', fontWeight: 'bold', color: '#000000' }}>{settings.agencyName}</span>
-                                  <span style={{ fontSize: '9pt', marginLeft: '1.25rem', color: '#000000', fontWeight: 'bold' }}>
-                                    Area: {block.areaName.toUpperCase()} {block.isFirstChunkOfArea ? '' : '(Continued)'}
+                                  <span style={{ fontSize: '10pt', fontWeight: 'bold', color: '#000000' }}>{settings.agencyName}</span>
+                                  <span style={{ fontSize: '8.5pt', marginLeft: '1.25rem', color: '#000000', fontWeight: 'bold' }}>
+                                    Area: {areaName.toUpperCase()}
                                   </span>
                                 </div>
                                 <div style={{ textAlign: 'right', fontSize: '8pt', color: '#333333', fontWeight: 'normal' }}>
-                                  <strong>Total Booking:</strong> {block.areaTotalRows} | <strong>Cylinders:</strong> {block.areaTotalCylinders}
+                                  <strong>Total Booking:</strong> {areaTotalRows} | <strong>Cylinders:</strong> {areaTotalCylinders}
                                 </div>
                               </div>
                             </th>
@@ -2915,7 +2873,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {block.chunkRows.map((row, idx) => {
+                          {areaRows.map((row, idx) => {
                             const dateOnly = row.OrderDate ? row.OrderDate.split(' ')[0] : '';
                             const rate = getRate(row.Packagecode_Desc);
                             const qty = parseInt(row.OrderQuantity || 1, 10);
@@ -2923,7 +2881,7 @@ export default function App() {
 
                             return (
                               <tr key={idx}>
-                                {settings.visibleColumns?.sn !== false && <td className="text-center" style={{ fontSize: `${getColFontSize('sn', 9)}pt` }}>{block.serialStart + idx}</td>}
+                                {settings.visibleColumns?.sn !== false && <td className="text-center" style={{ fontSize: `${getColFontSize('sn', 9)}pt` }}>{idx + 1}</td>}
                                 {settings.visibleColumns?.consumerNo !== false && <td style={{ fontSize: `${getColFontSize('consumer_no', 9)}pt` }}>{row.ConsumerNo}</td>}
                                 {settings.visibleColumns?.consumerName !== false && <td className="font-bold" style={{ fontSize: `${getColFontSize('name', 9.5)}pt` }}>{row.ConsumerName}</td>}
                                 {settings.visibleColumns?.orderDate !== false && <td style={{ fontSize: `${getColFontSize('order_date', 9)}pt` }}>{dateOnly}</td>}
@@ -2947,10 +2905,10 @@ export default function App() {
                         </tbody>
                       </table>
                     </div>
-                  ))}
-                </div>
-              );
-            });
+                  );
+                })}
+              </div>
+            );
           }
 
           // SEPARATE PAGE PER AREA (Classic mode when continuousPrintMode is false)

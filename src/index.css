@@ -909,6 +909,17 @@ body {
 }
 
 /* Print table styles are global so html2pdf.js can render them correctly on screen */
+.print-area-continuous {
+  display: block;
+  width: 100%;
+}
+
+.print-area-block {
+  display: block;
+  margin-bottom: 8px;
+  break-inside: auto;
+  page-break-inside: auto;
+}
 .print-table {
   width: 100%;
   border-collapse: collapse;
