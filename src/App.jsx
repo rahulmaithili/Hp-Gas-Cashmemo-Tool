@@ -3239,7 +3239,7 @@ export default function App() {
                       Don't have an active license key or expired?
                     </span>
                     <a
-                      href="https://licensescript.netlify.app/"
+                      href="https://licensescript.netlify.app/products/cashmemo-tool"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="license-portal-btn"
@@ -3263,7 +3263,7 @@ export default function App() {
                 </button>
               ) : (
                 <a
-                  href="https://licensescript.netlify.app/"
+                  href="https://licensescript.netlify.app/products/cashmemo-tool"
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
