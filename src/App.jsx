@@ -4,7 +4,7 @@ import {
   RefreshCw, FileSpreadsheet, CheckCircle2, X, ChevronLeft, 
   ChevronRight, Info, Coins, Users, MapPin, CheckSquare, Square,
   Printer, Upload, Filter, ListCheck, UserCheck, Languages, AlertCircle,
-  Trash2, Type, Send, UserPlus, Copy, Calendar, KeyRound, ShieldCheck, ShieldAlert, ExternalLink
+  Trash2, Type, Send, UserPlus, Copy, Calendar, KeyRound, ShieldCheck, ShieldAlert, ExternalLink, ChevronDown, ChevronUp, RotateCcw
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
@@ -70,6 +70,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // Village selector state
   const [villageSelectorText, setVillageSelectorText] = useState('');
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [isQuickSelectOpen, setIsQuickSelectOpen] = useState(false);
   
   // Filter states
   const [selectedAreas, setSelectedAreas] = useState([]);
@@ -1932,33 +1934,91 @@ export default function App() {
 
 
             {/* Filter Panel */}
-            <div className="card">
-              <div className="card-title">
-                <SlidersHorizontal size={20} />
-                <span>Advanced Search & Filters</span>
+            <div className="card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.25rem' }}>
+              {/* Header of Filter Card */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                  <SlidersHorizontal size={18} style={{ color: 'var(--primary)' }} />
+                  <span>Control Center & Filters</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Matching:</span>
+                  <span style={{ fontWeight: 700, color: 'var(--primary)', background: 'var(--primary-light)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                    {filteredData.length} records
+                  </span>
+                </div>
               </div>
-              
-              {/* Row of Dropdowns */}
-              <div className="grid-filters">
-                {/* 1. Multi-Area Autocomplete Dropdown */}
+
+              {/* 1. Full-width Modern Quick Search Input */}
+              <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                <Search size={18} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  className="input-control"
+                  placeholder="Quick search by consumer no, name, village, or address (comma-separated for multiple)..."
+                  value={textSearch}
+                  onChange={(e) => { setTextSearch(e.target.value); setCurrentPage(1); }}
+                  style={{
+                    paddingLeft: '2.5rem',
+                    paddingRight: textSearch ? '2.5rem' : '1rem',
+                    height: '42px',
+                    fontSize: '0.925rem',
+                    borderRadius: 'var(--radius-md)'
+                  }}
+                />
+                {textSearch && (
+                  <button
+                    onClick={() => { setTextSearch(''); setCurrentPage(1); }}
+                    style={{
+                      position: 'absolute',
+                      right: '0.85rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontSize: '1rem'
+                    }}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* 2. Grid of 5 Filters (Area, Vendor, eKYC, Payment, Date Range) */}
+              <div className="grid-filters" style={{ marginBottom: '0.75rem' }}>
+                {/* Area Dropdown */}
                 <div className="form-group" ref={areaRef}>
-                  <label>Select Area(s)</label>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 600 }}>Area / Route</label>
                   <div 
                     className={`multi-select-trigger ${isAreaDropdownOpen ? 'open' : ''}`}
                     onClick={() => setIsAreaDropdownOpen(!isAreaDropdownOpen)}
+                    style={{ minHeight: '40px', height: '40px', padding: '0.35rem 1.75rem 0.35rem 0.65rem' }}
                   >
                     {selectedAreas.length === 0 ? (
-                      <span style={{ color: 'var(--text-muted)' }}>All Areas ({uniqueAreas.length})</span>
-                    ) : (
-                      selectedAreas.map(area => (
-                        <span key={area} className="multi-select-tag">
-                          {area}
-                          <button onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedAreas(selectedAreas.filter(a => a !== area));
-                          }}>×</button>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>All Areas ({uniqueAreas.length})</span>
+                    ) : selectedAreas.length === 1 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedAreas[0]}
                         </span>
-                      ))
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setSelectedAreas([]); }}
+                          style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem', fontSize: '0.8rem' }}
+                        >✕</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.875rem' }}>
+                          {selectedAreas.length} Areas
+                        </span>
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setSelectedAreas([]); }}
+                          style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem', fontSize: '0.8rem' }}
+                        >✕</span>
+                      </div>
                     )}
                   </div>
                   {isAreaDropdownOpen && (
@@ -2006,25 +2066,36 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 2. Multi-Delivery Man (Vendor) Autocomplete Dropdown */}
+                {/* Delivery Agent / Vendor */}
                 <div className="form-group" ref={deliveryManRef}>
-                  <label>Select Vendor / Delivery Agent</label>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 600 }}>Delivery Agent / Vendor</label>
                   <div 
                     className={`multi-select-trigger ${isDeliveryManDropdownOpen ? 'open' : ''}`}
                     onClick={() => setIsDeliveryManDropdownOpen(!isDeliveryManDropdownOpen)}
+                    style={{ minHeight: '40px', height: '40px', padding: '0.35rem 1.75rem 0.35rem 0.65rem' }}
                   >
                     {selectedDeliveryMen.length === 0 ? (
-                      <span style={{ color: 'var(--text-muted)' }}>All Vendors ({uniqueDeliveryMen.length})</span>
-                    ) : (
-                      selectedDeliveryMen.map(man => (
-                        <span key={man} className="multi-select-tag">
-                          {man.split(' ')[0]}
-                          <button onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDeliveryMen(selectedDeliveryMen.filter(m => m !== man));
-                          }}>×</button>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>All Vendors ({uniqueDeliveryMen.length})</span>
+                    ) : selectedDeliveryMen.length === 1 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedDeliveryMen[0]}
                         </span>
-                      ))
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setSelectedDeliveryMen([]); }}
+                          style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem', fontSize: '0.8rem' }}
+                        >✕</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.875rem' }}>
+                          {selectedDeliveryMen.length} Vendors
+                        </span>
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setSelectedDeliveryMen([]); }}
+                          style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem', fontSize: '0.8rem' }}
+                        >✕</span>
+                      </div>
                     )}
                   </div>
                   {isDeliveryManDropdownOpen && (
@@ -2072,25 +2143,36 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 3. eKYC Status Multi-select Dropdown */}
+                {/* eKYC Status */}
                 <div className="form-group" ref={ekycRef}>
-                  <label>Select eKYC Status(es)</label>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 600 }}>eKYC Status</label>
                   <div 
                     className={`multi-select-trigger ${isEkycDropdownOpen ? 'open' : ''}`}
                     onClick={() => setIsEkycDropdownOpen(!isEkycDropdownOpen)}
+                    style={{ minHeight: '40px', height: '40px', padding: '0.35rem 1.75rem 0.35rem 0.65rem' }}
                   >
                     {selectedEkycStatuses.length === 0 ? (
-                      <span style={{ color: 'var(--text-muted)' }}>All Statuses ({uniqueEkycStatuses.length})</span>
-                    ) : (
-                      selectedEkycStatuses.map(status => (
-                        <span key={status} className="multi-select-tag">
-                          {status.split(' ')[0]}
-                          <button onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedEkycStatuses(selectedEkycStatuses.filter(s => s !== status));
-                          }}>×</button>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>All Statuses ({uniqueEkycStatuses.length})</span>
+                    ) : selectedEkycStatuses.length === 1 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedEkycStatuses[0]}
                         </span>
-                      ))
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setSelectedEkycStatuses([]); }}
+                          style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem', fontSize: '0.8rem' }}
+                        >✕</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.875rem' }}>
+                          {selectedEkycStatuses.length} Statuses
+                        </span>
+                        <span 
+                          onClick={(e) => { e.stopPropagation(); setSelectedEkycStatuses([]); }}
+                          style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem', fontSize: '0.8rem' }}
+                        >✕</span>
+                      </div>
                     )}
                   </div>
                   {isEkycDropdownOpen && (
@@ -2138,356 +2220,411 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 4. Refill Payment Dropdown */}
+                {/* Refill Payment Status */}
                 <div className="form-group">
-                  <label>Refill Payment (Online / Cash)</label>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 600 }}>Payment Mode</label>
                   <select 
                     className="input-control" 
                     value={paymentStatusFilter} 
                     onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                    style={{ height: '40px', fontSize: '0.875rem' }}
                   >
-                    <option value="ALL">All Payment Statuses</option>
-                    <option value="PAID">PAID (Online)</option>
-                    <option value="UNPAID">CASH TO COLLECT (Unpaid)</option>
+                    <option value="ALL">All Payments</option>
+                    <option value="PAID">Online (PAID)</option>
+                    <option value="UNPAID">Cash to Collect (UNPAID)</option>
                   </select>
                 </div>
 
-                {/* 5. Date Range Selector - From Date */}
+                {/* Date Range Group (From & To side-by-side) */}
                 <div className="form-group">
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <Calendar size={14} />
-                    <span>From Date (इस तारीख से)</span>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Calendar size={13} style={{ color: 'var(--primary)' }} />
+                    <span>Booking Date Range</span>
                   </label>
-                  <input 
-                    type="date" 
-                    className="input-control" 
-                    value={startDate} 
-                    onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }} 
-                  />
-                </div>
-
-                {/* 6. Date Range Selector - To Date */}
-                <div className="form-group">
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <Calendar size={14} />
-                    <span>To Date (इस तारीख तक)</span>
-                  </label>
-                  <input 
-                    type="date" 
-                    className="input-control" 
-                    value={endDate} 
-                    onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }} 
-                  />
-                </div>
-              </div>
-
-              {/* Full Width Address and Village search */}
-              <div className="form-group" style={{ marginTop: '0.75rem' }}>
-                <label>Search in Address / Village Name (Supports multiple values separated by commas ",")</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="text"
-                    className="input-control"
-                    placeholder="Search e.g. mominpur, yamsam, 615814..."
-                    value={textSearch}
-                    onChange={(e) => { setTextSearch(e.target.value); setCurrentPage(1); }}
-                    style={{ paddingLeft: '2rem' }}
-                  />
-                  <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>
-                  💡 Enter multiple village names or consumer IDs separated by commas to filter them all together.
-                </span>
-              </div>
-
-              {/* Hindi Translation Widget */}
-              <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', backgroundColor: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
-                <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                  <Languages size={18} style={{ color: 'var(--primary)' }} />
-                  <span>Translate Column to Hindi (हिंदी में बदलें):</span>
-                </span>
-                
-                <select 
-                  className="input-control" 
-                  style={{ width: '180px', padding: '0.375rem 0.5rem', fontSize: '0.85rem' }} 
-                  value={translationColumn}
-                  onChange={(e) => setTranslationColumn(e.target.value)}
-                >
-                  <option value="ConsumerName">ConsumerName (नाम)</option>
-                  <option value="AreaName">AreaName (गाँव/क्षेत्र)</option>
-                  <option value="ConsumerAddress">ConsumerAddress (पता)</option>
-                  <option value="EkycStatus">EkycStatus (eKYC स्थिति)</option>
-                </select>
-
-                <button 
-                  className="btn btn-primary" 
-                  style={{ padding: '0.375rem 0.75rem', fontSize: '0.85rem' }} 
-                  onClick={handleTranslateColumn}
-                  disabled={translationLoading}
-                >
-                  Translate to Hindi ({activeSelectedRows.length > 0 ? activeSelectedRows.length : filteredData.length})
-                </button>
-
-                {hasTranslatedColumn[translationColumn] && (
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ padding: '0.375rem 0.75rem', fontSize: '0.85rem', color: 'var(--danger)' }} 
-                    onClick={handleRevertTranslation}
-                  >
-                    Undo Translation (वापस बदलें)
-                  </button>
-                )}
-                
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <AlertCircle size={12} />
-                  <span>Translates only searched or checked rows. (केवल सर्च या टिक किए गए नाम ही बदलेंगे)</span>
-                </span>
-              </div>
-
-              {/* Selection Batch Helpers (eKYC check/uncheck buttons) */}
-              <div style={{ padding: '0.75rem 0', marginTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-                <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <ListCheck size={16} />
-                  <span>eKYC Quick Selectors:</span>
-                </span>
-                {uniqueEkycStatuses.map(status => (
-                  <div key={status} style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button 
-                      className="btn btn-secondary" 
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} 
-                      onClick={() => selectByEkycStatus(status, true)}
-                    >
-                      Check "{status}"
-                    </button>
-                    <button 
-                      className="btn btn-secondary" 
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'var(--danger)' }} 
-                      onClick={() => selectByEkycStatus(status, false)}
-                    >
-                      Uncheck
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Village/Address Quick Selector (गाँव/पता टिक-अनटिक टूल) */}
-              <div style={{ padding: '0.75rem 0', marginTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                  <MapPin size={16} style={{ color: 'var(--primary)' }} />
-                  <span>Quick Village Selector (गाँव के अनुसार टिक/अन-टिक करें):</span>
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    className="input-control"
-                    placeholder="Enter Village Name e.g. birsair, samou..."
-                    value={villageSelectorText}
-                    onChange={(e) => setVillageSelectorText(e.target.value)}
-                    style={{ width: '250px', padding: '0.375rem 0.5rem', fontSize: '0.85rem' }}
-                  />
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ padding: '0.375rem 0.75rem', fontSize: '0.85rem' }} 
-                    onClick={() => handleToggleByVillage('check')}
-                  >
-                    Check Matching (टिक करें)
-                  </button>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ padding: '0.375rem 0.75rem', fontSize: '0.85rem', color: 'var(--danger)' }} 
-                    onClick={() => handleToggleByVillage('uncheck')}
-                  >
-                    Uncheck Matching (अन-टिक करें)
-                  </button>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ padding: '0.375rem 0.75rem', fontSize: '0.85rem' }} 
-                    onClick={() => handleToggleByVillage('keep-only')}
-                  >
-                    Keep Only This (केवल इसे टिक रखें)
-                  </button>
-                </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  💡 Type a village/address keyword (like "birsair") to quickly check or uncheck rows in the current filtered list.
-                </span>
-              </div>
-
-              {/* Formatting and layout controls */}
-              <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={includeRatesAndSignature} 
-                    onChange={(e) => toggleIncludeRatesAndSignature(e.target.checked)} 
-                  />
-                  <span>Include Cylinder Rates & Signature Columns</span>
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={useExcelClassicStyle} 
-                    onChange={(e) => setUseExcelClassicStyle(e.target.checked)} 
-                  />
-                  <span>Classic Plain Grid Excel style (Matches PDF screenshot)</span>
-                </label>
-              </div>
-
-              {/* Column Selection Checkboxes */}
-              <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)' }}>
-                <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                  Select Columns to Include in Cashmemo (दिखाए जाने वाले कॉलम चुनें):
-                </span>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.5rem 1rem' }}>
-                  {Object.entries({
-                    sn: 'Sn',
-                    consumerNo: 'ConsumerNo',
-                    consumerName: 'ConsumerName',
-                    orderDate: 'OrderDate',
-                    areaName: 'AreaName',
-                    deliveryMan: 'DeliveryMan',
-                    online: 'Online Paid Status',
-                    ivrsNo: 'IVRSBookingNo',
-                    mobileNo: 'MobileNo',
-                    address: 'ConsumerAddress',
-                    ekyc: 'EkycStatus',
-                    rate: 'Cylinder Rate',
-                    total: 'Total Amount',
-                    signature: 'Signature/Remarks'
-                  }).map(([key, label]) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={settings.visibleColumns?.[key] !== false} 
-                        onChange={() => toggleColumnVisibility(key)} 
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Rows per page & Continuous Print Mode settings */}
-              <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.25rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <span className="font-bold" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    Rows per page in PDF (प्रति पेज लाइन):
-                  </span>
-                  <select
-                    className="input-control"
-                    style={{ width: '120px', padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                    value={settings.rowsPerPrintPage || 15}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 15;
-                      const updatedSettings = {
-                        ...settings,
-                        rowsPerPrintPage: val
-                      };
-                      setSettings(updatedSettings);
-                      setTempSettings(updatedSettings);
-                      saveSettingsQuietly(updatedSettings);
-                    }}
-                  >
-                    <option value={10}>10 lines</option>
-                    <option value={15}>15 lines</option>
-                    <option value={20}>20 lines</option>
-                    <option value={25}>25 lines</option>
-                    <option value={30}>30 lines</option>
-                    <option value={40}>40 lines</option>
-                    <option value={50}>50 lines</option>
-                    <option value={100}>100 lines</option>
-                  </select>
-                </div>
-
-                {/* Continuous Flow vs New Page Per Area Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--bg-tertiary)', padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '0.35rem', height: '40px' }}>
                     <input 
-                      type="checkbox" 
-                      checked={settings.continuousPrintMode !== false} 
-                      onChange={(e) => {
-                        const updated = {
-                          ...settings,
-                          continuousPrintMode: e.target.checked
-                        };
-                        setSettings(updated);
-                        setTempSettings(updated);
-                        saveSettingsQuietly(updated);
-                      }} 
-                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      type="date" 
+                      className="input-control" 
+                      value={startDate} 
+                      onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }} 
+                      title="From Date"
+                      style={{ padding: '0.35rem 0.4rem', fontSize: '0.825rem', height: '40px' }}
                     />
-                    <span>📄 Continuous Page Flow (Save Paper / अगला एरिया खाली जगह में आए)</span>
-                  </label>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>to</span>
+                    <input 
+                      type="date" 
+                      className="input-control" 
+                      value={endDate} 
+                      onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }} 
+                      title="To Date"
+                      style={{ padding: '0.35rem 0.4rem', fontSize: '0.825rem', height: '40px' }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Actions panel */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="btn btn-secondary" onClick={clearFilters}>
-                    Reset Filters
+              {/* 3. Sleek Utility Bar: Hindi Translate + Toggle Drawers */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                flexWrap: 'wrap', 
+                gap: '0.75rem', 
+                padding: '0.6rem 0.85rem', 
+                backgroundColor: 'var(--bg-tertiary)', 
+                borderRadius: 'var(--radius-md)', 
+                border: '1px solid var(--border)',
+                marginTop: '0.5rem' 
+              }}>
+                {/* Hindi Translation Tool */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                    <Languages size={16} style={{ color: 'var(--primary)' }} />
+                    <span>Translate:</span>
+                  </div>
+                  <select 
+                    className="input-control" 
+                    style={{ width: '160px', padding: '0.25rem 0.5rem', fontSize: '0.85rem', height: '32px' }} 
+                    value={translationColumn}
+                    onChange={(e) => setTranslationColumn(e.target.value)}
+                  >
+                    <option value="ConsumerAddress">Address (पता)</option>
+                    <option value="ConsumerName">Name (नाम)</option>
+                    <option value="AreaName">Area (गाँव/क्षेत्र)</option>
+                    <option value="EkycStatus">eKYC (स्थिति)</option>
+                  </select>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.825rem', height: '32px', gap: '0.35rem' }} 
+                    onClick={handleTranslateColumn}
+                    disabled={translationLoading}
+                  >
+                    Translate ({activeSelectedRows.length > 0 ? activeSelectedRows.length : filteredData.length})
                   </button>
-                  <button className="btn btn-secondary" onClick={handleToggleAllFiltered}>
-                    {filteredData.every(row => selectedRows.has(data.indexOf(row))) ? 'Uncheck All Filtered' : 'Check All Filtered'}
+                  {hasTranslatedColumn[translationColumn] && (
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ padding: '0.25rem 0.6rem', fontSize: '0.825rem', height: '32px', color: 'var(--danger)' }} 
+                      onClick={handleRevertTranslation}
+                    >
+                      Undo
+                    </button>
+                  )}
+                </div>
+
+                {/* Collapsible Options Toggles */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    className={`btn ${isQuickSelectOpen ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.825rem', height: '32px', gap: '0.35rem' }}
+                    onClick={() => setIsQuickSelectOpen(!isQuickSelectOpen)}
+                  >
+                    <MapPin size={14} />
+                    <span>Village & eKYC Tools</span>
+                    {isQuickSelectOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  <button
+                    className={`btn ${isCustomizeOpen ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.825rem', height: '32px', gap: '0.35rem' }}
+                    onClick={() => setIsCustomizeOpen(!isCustomizeOpen)}
+                  >
+                    <SlidersHorizontal size={14} />
+                    <span>Customize Print ({Object.values(settings.visibleColumns || {}).filter(v => v !== false).length} cols)</span>
+                    {isCustomizeOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. Collapsible Drawer A: Village & eKYC Batch Selection */}
+              {isQuickSelectOpen && (
+                <div style={{ 
+                  marginTop: '0.75rem', 
+                  padding: '0.85rem', 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.65rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <MapPin size={15} style={{ color: 'var(--primary)' }} />
+                      <span>Quick Village & eKYC Selection</span>
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Quickly check or uncheck rows matching a specific village or eKYC</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="input-control"
+                      placeholder="Type village name (e.g. birsair, samou)..."
+                      value={villageSelectorText}
+                      onChange={(e) => setVillageSelectorText(e.target.value)}
+                      style={{ maxWidth: '280px', height: '34px', fontSize: '0.85rem' }}
+                    />
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.825rem', height: '34px' }} 
+                      onClick={() => handleToggleByVillage('check')}
+                    >
+                      Check Matching
+                    </button>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.825rem', height: '34px', color: 'var(--danger)' }} 
+                      onClick={() => handleToggleByVillage('uncheck')}
+                    >
+                      Uncheck Matching
+                    </button>
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.825rem', height: '34px' }} 
+                      onClick={() => handleToggleByVillage('keep-only')}
+                    >
+                      Keep Only This
+                    </button>
+
+                    {/* eKYC quick selectors right here */}
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>eKYC:</span>
+                      <button 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', height: '30px' }} 
+                        onClick={() => selectByEkycStatus('EKYC DONE', true)}
+                      >
+                        Check DONE
+                      </button>
+                      <button 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', height: '30px', color: 'var(--danger)' }} 
+                        onClick={() => selectByEkycStatus('EKYC DONE', false)}
+                      >
+                        Uncheck
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 5. Collapsible Drawer B: Customize Print & Columns */}
+              {isCustomizeOpen && (
+                <div style={{ 
+                  marginTop: '0.75rem', 
+                  padding: '1rem', 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem'
+                }}>
+                  {/* Page & Layout Options */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                      {/* Continuous Page Flow Toggle */}
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={settings.continuousPrintMode !== false} 
+                          onChange={(e) => {
+                            const updated = { ...settings, continuousPrintMode: e.target.checked };
+                            setSettings(updated);
+                            setTempSettings(updated);
+                            saveSettingsQuietly(updated);
+                          }} 
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <span>Continuous Page Flow (Save Paper)</span>
+                        <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'var(--success-light)', color: 'var(--success)', fontWeight: 600 }}>Zero Waste</span>
+                      </label>
+
+                      {/* Rows per page */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Lines per page:</span>
+                        <select
+                          className="input-control"
+                          style={{ width: '100px', padding: '0.25rem 0.5rem', fontSize: '0.85rem', height: '32px' }}
+                          value={settings.rowsPerPrintPage || 15}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10) || 15;
+                            const updated = { ...settings, rowsPerPrintPage: val };
+                            setSettings(updated);
+                            setTempSettings(updated);
+                            saveSettingsQuietly(updated);
+                          }}
+                        >
+                          {[10, 15, 20, 25, 30, 40, 50, 100].map(n => (
+                            <option key={n} value={n}>{n} lines</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={includeRatesAndSignature} 
+                          onChange={(e) => toggleIncludeRatesAndSignature(e.target.checked)} 
+                        />
+                        <span>Include Cylinder Rates</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={useExcelClassicStyle} 
+                          onChange={(e) => setUseExcelClassicStyle(e.target.checked)} 
+                        />
+                        <span>Classic Grid Excel Style</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* 14 Columns Checkboxes */}
+                  <div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                      Visible Columns in Printout & Table:
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.5rem 0.75rem' }}>
+                      {Object.entries({
+                        sn: 'Sn',
+                        consumerNo: 'Consumer No',
+                        consumerName: 'Consumer Name',
+                        orderDate: 'Order Date',
+                        areaName: 'Area Name',
+                        deliveryMan: 'Delivery Agent',
+                        online: 'Payment Status',
+                        ivrsNo: 'IVRS No',
+                        mobileNo: 'Mobile No',
+                        address: 'Address',
+                        ekyc: 'eKYC Status',
+                        rate: 'Cylinder Rate',
+                        total: 'Total Amount',
+                        signature: 'Signature'
+                      }).map(([key, label]) => (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.825rem' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={settings.visibleColumns?.[key] !== false} 
+                            onChange={() => toggleColumnVisibility(key)} 
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 6. Cohesive Modern Actions & Export Bar */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                flexWrap: 'wrap', 
+                gap: '0.75rem', 
+                marginTop: '1.25rem', 
+                borderTop: '1px solid var(--border)', 
+                paddingTop: '1rem' 
+              }}>
+                {/* Left: Filter Controls */}
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={clearFilters}
+                    style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem', gap: '0.35rem' }}
+                    title="Reset all filters"
+                  >
+                    <RotateCcw size={14} />
+                    <span>Reset Filters</span>
+                  </button>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={handleToggleAllFiltered}
+                    style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem', gap: '0.35rem' }}
+                  >
+                    <CheckSquare size={14} />
+                    <span>{filteredData.every(row => selectedRows.has(data.indexOf(row))) ? 'Uncheck All' : `Check All (${filteredData.length})`}</span>
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {/* Right: Export Buttons */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button 
-                    className="btn btn-primary" 
-                    onClick={handleDownloadPdfDirect}
-                    disabled={activeSelectedRows.length === 0}
-                    style={{ gap: '0.5rem', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
-                  >
-                    <Download size={18} />
-                    <span>Download PDF ({activeSelectedRows.length})</span>
-                  </button>
-
-                  <button 
-                    className="btn" 
-                    onClick={handlePrintPdf}
-                    disabled={activeSelectedRows.length === 0}
-                    style={{ gap: '0.5rem', border: '1px solid #dc2626', color: '#dc2626', backgroundColor: 'transparent', fontWeight: 600 }}
-                  >
-                    <Printer size={18} />
-                    <span>Print PDF / Save ({activeSelectedRows.length})</span>
-                  </button>
-
-                  <button 
-                    className="btn" 
+                    className="btn btn-secondary" 
                     onClick={handleCopyToClipboard}
                     disabled={activeSelectedRows.length === 0}
-                    style={{ gap: '0.5rem', border: '1px solid #10b981', color: '#10b981', backgroundColor: 'transparent', fontWeight: 600 }}
+                    style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem', gap: '0.35rem' }}
+                    title="Copy selected records to clipboard"
                   >
-                    <Copy size={18} />
-                    <span>Copy Clipboard ({activeSelectedRows.length})</span>
+                    <Copy size={15} />
+                    <span>Copy ({activeSelectedRows.length})</span>
                   </button>
 
                   <button 
-                    className="btn btn-primary" 
+                    className="btn" 
                     onClick={() => exportToExcel(true)} 
                     disabled={activeSelectedRows.length === 0}
-                    style={{ gap: '0.5rem', background: 'linear-gradient(135deg, var(--primary) 0%, var(--border-focus) 100%)' }}
+                    style={{ 
+                      padding: '0.45rem 0.85rem', 
+                      fontSize: '0.85rem', 
+                      gap: '0.4rem', 
+                      backgroundColor: '#10b981', 
+                      color: '#ffffff', 
+                      border: 'none', 
+                      fontWeight: 600,
+                      boxShadow: 'var(--shadow-sm)'
+                    }}
                   >
-                    <Download size={18} />
-                    <span>Download Excel (Area-wise) ({activeSelectedRows.length})</span>
+                    <FileSpreadsheet size={16} />
+                    <span>Excel Area-wise</span>
+                  </button>
+
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => exportToExcel(false)} 
+                    disabled={activeSelectedRows.length === 0}
+                    style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem', gap: '0.35rem', color: '#059669', borderColor: '#a7f3d0' }}
+                  >
+                    <FileSpreadsheet size={15} />
+                    <span>Single Sheet</span>
+                  </button>
+
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={handleDownloadPdfDirect}
+                    disabled={activeSelectedRows.length === 0}
+                    style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem', gap: '0.35rem', color: '#dc2626', borderColor: '#fca5a5' }}
+                  >
+                    <Download size={15} />
+                    <span>Download PDF</span>
                   </button>
 
                   <button 
                     className="btn btn-primary" 
-                    onClick={() => exportToExcel(false)} 
+                    onClick={handlePrintPdf}
                     disabled={activeSelectedRows.length === 0}
-                    style={{ gap: '0.5rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                    style={{ 
+                      padding: '0.45rem 1.15rem', 
+                      fontSize: '0.9rem', 
+                      fontWeight: 700, 
+                      gap: '0.4rem', 
+                      backgroundColor: '#dc2626', 
+                      borderColor: '#dc2626',
+                      color: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)'
+                    }}
                   >
-                    <Download size={18} />
-                    <span>Download Excel (Single Sheet) ({activeSelectedRows.length})</span>
+                    <Printer size={16} />
+                    <span>Print Cashmemos ({activeSelectedRows.length})</span>
                   </button>
                 </div>
               </div>
             </div>
-
-
 
             {/* Data Table Card */}
             <div className="card" style={{ padding: 0 }}>

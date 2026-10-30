@@ -210,9 +210,9 @@ body {
 /* Grid Layouts */
 .grid-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 /* Inputs & Form Controls */
@@ -253,17 +253,17 @@ body {
 }
 
 .multi-select-trigger {
-  min-height: 42px;
+  min-height: 40px;
+  height: 40px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
   align-items: center;
-  padding: 0.375rem 2rem 0.375rem 0.625rem;
+  padding: 0.35rem 2rem 0.35rem 0.65rem;
   cursor: pointer;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background-color: var(--bg-primary);
   position: relative;
+  overflow: hidden;
 }
 
 .multi-select-trigger::after {
