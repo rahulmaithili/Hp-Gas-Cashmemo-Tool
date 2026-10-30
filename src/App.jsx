@@ -238,16 +238,21 @@ export default function App() {
       }
     } catch (err) {
       console.error('License validation network error:', err);
-      // Only fallback to local cache if offline AND not explicitly blocked/invalid in storage
-      if (licenseInfo && licenseInfo.key === key && licenseInfo.status === 'active') {
-        if (isLicenseActive(licenseInfo)) {
+      // Offline fallback is BOUNDED: only within 24h of the last successful
+      // server verification, and only for the same still-unexpired key.
+      // Beyond that the app locks until the server can be reached again.
+      // (Reads storage fresh, not stale component state.)
+      try {
+        const fresh = JSON.parse(localStorage.getItem('hp_gas_license') || 'null');
+        const OFFLINE_GRACE_MS = 24 * 60 * 60 * 1000;
+        if (fresh && fresh.key === key && fresh.status === 'active' && isLicenseActive(fresh) && fresh.lastVerified && (Date.now() - fresh.lastVerified) <= OFFLINE_GRACE_MS) {
           if (!isSilent) {
             setIsLicenseModalOpen(false);
             showToast('Verified offline from local cache.');
           }
           return true;
         }
-      }
+      } catch (e) {}
       if (!isSilent) {
         setLicenseError('Failed to connect to license server. Please check internet connection.');
       }
@@ -283,6 +288,24 @@ export default function App() {
         setIsLicenseModalOpen(true);
       }
     } catch (e) {}
+  }, []);
+
+  // Periodic server re-verification while the app stays open: a revoked,
+  // expired, or admin-locked license locks within ~30 minutes, not just
+  // on the next page reload. Silent mode never opens the modal on network
+  // errors (the bounded offline fallback above still applies).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      try {
+        const saved = localStorage.getItem('hp_gas_license');
+        if (!saved) return;
+        const lic = JSON.parse(saved);
+        if (lic && lic.key && lic.status === 'active') {
+          verifyLicenseKey(lic.key, true);
+        }
+      } catch (e) {}
+    }, 30 * 60 * 1000);
+    return () => clearInterval(timer);
   }, []);
 
   // Click outside listener for dropdowns
