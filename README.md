@@ -55,6 +55,13 @@ issued from the LicenseWala portal
   (max 24 hours from the last successful verification) covers temporary
   outages.
 
+## Incognito mode
+
+The web app works in an Incognito window too, with one difference:
+Incognito forgets stored data when the window closes, so each fresh
+Incognito session shows the activation screen once. Enter your
+LicenseWala key and everything works for that session.
+
 ## Tech stack
 
 - **Frontend**: React 18, Vite, Lucide React Icons, Vanilla CSS design
